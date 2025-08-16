@@ -568,6 +568,7 @@ EOF
 		--no-hostonly \
 		--ro-mnt \
 		--add "bash ${modules[*]}" \
+		--add-drivers "virtio virtio_pci virtio_net virtio_blk" \
 		--force \
 		--verbose \
 		/boot/initramfs-"$kver".img
