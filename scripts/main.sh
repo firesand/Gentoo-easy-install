@@ -1155,37 +1155,7 @@ EOF
 		done
 	fi
 	
-	# Apply global ACCEPT_KEYWORDS
-	if [[ ${#ACCEPT_KEYWORDS[@]} -gt 0 ]]; then
-		einfo "Applying ${#ACCEPT_KEYWORDS[@]} global ACCEPT_KEYWORDS"
-		local keywords_string=""
-		for keyword in "${ACCEPT_KEYWORDS[@]}"; do
-			if [[ -n "$keyword" ]]; then
-				[[ -n "$keywords_string" ]] && keywords_string+=" "
-				keywords_string+="$keyword"
-			fi
-		done
-		
-		if [[ -n "$keywords_string" ]]; then
-			einfo "Setting ACCEPT_KEYWORDS: $keywords_string"
-			echo "ACCEPT_KEYWORDS=\"$keywords_string\"" >> /etc/portage/make.conf
-		fi
-		
-		# Also create a dedicated package.accept_keywords file for better organization
-		if [[ ${#ACCEPT_KEYWORDS[@]} -gt 0 ]]; then
-			einfo "Creating package.accept_keywords file"
-			cat > /etc/portage/package.accept_keywords <<EOF
-# Global ACCEPT_KEYWORDS configured during installation
-# Generated automatically by gentoo-easy-install
-EOF
-			
-			for keyword in "${ACCEPT_KEYWORDS[@]}"; do
-				if [[ -n "$keyword" ]]; then
-					echo "$keyword" >> /etc/portage/package.accept_keywords
-				fi
-			done
-		fi
-	fi
+
 	
 	# Apply overlays
 	if [[ ${#OVERLAY_URLS[@]} -gt 0 ]]; then

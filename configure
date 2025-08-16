@@ -540,7 +540,6 @@ function load_default_config() {
 	# Package Management Configuration
 	PACKAGE_USE_RULES=()
 	PACKAGE_KEYWORDS=()
-	ACCEPT_KEYWORDS=()
 	OVERLAY_URLS=()
 	OVERLAY_NAMES=()
 
@@ -1020,7 +1019,6 @@ MENU_ITEMS=(
 	"--------"
 	"PACKAGE_USE_RULES"
 	"PACKAGE_KEYWORDS"
-	"ACCEPT_KEYWORDS"
 	"OVERLAY_MANAGER"
 	"--------"
 	"ADDITIONAL_PACKAGES"
@@ -1944,13 +1942,7 @@ function PACKAGE_KEYWORDS_menu()  {
 	package_keywords_manager
 }
 
-function ACCEPT_KEYWORDS_tag()   { echo "Accept keywords"; }
-function ACCEPT_KEYWORDS_label() { echo "${#ACCEPT_KEYWORDS[@]} keywords"; }
-function ACCEPT_KEYWORDS_show()  { return 0; }
-function ACCEPT_KEYWORDS_help()  { echo "Configure global ACCEPT_KEYWORDS for testing/unstable packages. Format: keywords separated by space (e.g., '~amd64 ~x86')."; }
-function ACCEPT_KEYWORDS_menu()  {
-	accept_keywords_manager
-}
+
 
 function OVERLAY_MANAGER_tag()   { echo "Portage overlays"; }
 function OVERLAY_MANAGER_label() { echo "${#OVERLAY_URLS[@]} overlays"; }
@@ -1962,375 +1954,34 @@ function OVERLAY_MANAGER_menu()  {
 
 # Package USE rules manager
 function package_use_rules_manager() {
-	local action
-	local current_rules=("${PACKAGE_USE_RULES[@]}")
+	dialog \
+		--title "Package USE Rules" \
+		--inputbox "Enter package USE rules (portage package ATOMs with USE flags). Delimited by space.\n\nExample: dev-lang/python -tk +sqlite app-office/libreoffice java" \
+		"${INPUTBOX_SIZE[@]}" \
+		"${PACKAGE_USE_RULES[*]}"
 	
-	while true; do
-		# Create action menu
-		local actions=("add" "edit" "remove" "view" "back")
-		local action_labels=("Add rule" "Edit rule" "Remove rule" "View rules" "Back to main menu")
-		
-		dialog \
-			--title "Package USE Rules Manager" \
-			--menu "Select an action:" \
-			"${MENU_SIZE[@]}" \
-			"${#actions[@]}" \
-			"${actions[@]}" \
-			"${action_labels[@]}"
-		
-		action="$dialog_out"
-		
-		case "$action" in
-			"add")
-				local package_atom use_flags
-				dialog \
-					--title "Add USE Rule" \
-					--form "Enter package atom and USE flags:" \
-					"${INPUTBOX_SIZE[@]}" \
-					"Package atom:" 1 1 "" 1 20 50 0 \
-					"USE flags:" 2 1 "" 2 20 50 0
-				
-				package_atom="$(echo "$dialog_out" | head -1)"
-				use_flags="$(echo "$dialog_out" | tail -1)"
-				
-				if [[ -n "$package_atom" && -n "$use_flags" ]]; then
-					PACKAGE_USE_RULES+=("$package_atom $use_flags")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "USE rule added successfully!" 6 50
-				fi
-				;;
-			"edit")
-				if [[ ${#PACKAGE_USE_RULES[@]} -eq 0 ]]; then
-					dialog --msgbox "No USE rules to edit." 6 40
-					continue
-				fi
-				
-				local rule_index
-				local rules_display=()
-				for i in "${!PACKAGE_USE_RULES[@]}"; do
-					rules_display+=("$i" "${PACKAGE_USE_RULES[$i]}")
-				done
-				
-				dialog \
-					--title "Edit USE Rule" \
-					--menu "Select rule to edit:" \
-					"${MENU_SIZE[@]}" \
-					"${#rules_display[@]}" \
-					"${rules_display[@]}"
-				
-				rule_index="$dialog_out"
-				if [[ -n "$rule_index" ]]; then
-					local new_rule
-					dialog \
-						--title "Edit USE Rule" \
-						--inputbox "Edit USE rule:" \
-						"${INPUTBOX_SIZE[@]}" \
-						"${PACKAGE_USE_RULES[$rule_index]}"
-					
-					new_rule="$dialog_out"
-					if [[ -n "$new_rule" ]]; then
-						PACKAGE_USE_RULES[$rule_index]="$new_rule"
-						UNSAVED_CHANGES=true
-						dialog --msgbox "USE rule updated successfully!" 6 50
-					fi
-				fi
-				;;
-			"remove")
-				if [[ ${#PACKAGE_USE_RULES[@]} -eq 0 ]]; then
-					dialog --msgbox "No USE rules to remove." 6 40
-					continue
-				fi
-				
-				local rule_index
-				local rules_display=()
-				for i in "${!PACKAGE_USE_RULES[@]}"; do
-					rules_display+=("$i" "${PACKAGE_USE_RULES[$i]}")
-				done
-				
-				dialog \
-					--title "Remove USE Rule" \
-					--menu "Select rule to remove:" \
-					"${MENU_SIZE[@]}" \
-					"${#rules_display[@]}" \
-					"${rules_display[@]}"
-				
-				rule_index="$dialog_out"
-				if [[ -n "$rule_index" ]]; then
-					unset "PACKAGE_USE_RULES[$rule_index]"
-					PACKAGE_USE_RULES=("${PACKAGE_USE_RULES[@]}")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "USE rule removed successfully!" 6 50
-				fi
-				;;
-			"view")
-				if [[ ${#PACKAGE_USE_RULES[@]} -eq 0 ]]; then
-					dialog --msgbox "No USE rules configured." 6 40
-				else
-					local rules_text=""
-					for i in "${!PACKAGE_USE_RULES[@]}"; do
-						rules_text+="$((i+1)). ${PACKAGE_USE_RULES[$i]}\n"
-					done
-					
-					dialog \
-						--title "Current USE Rules" \
-						--scrolltext \
-						"${HELP_POPUP_SIZE[@]}" \
-						"$rules_text"
-				fi
-				;;
-			"back")
-				return 0
-				;;
-		esac
-	done
+	# shellcheck disable=SC2206
+	PACKAGE_USE_RULES=($dialog_out)
+	UNSAVED_CHANGES=true
 }
 
 # Package keywords manager
 function package_keywords_manager() {
-	local action
-	local current_keywords=("${PACKAGE_KEYWORDS[@]}")
+	dialog \
+		--title "Package Keywords" \
+		--inputbox "Enter package keywords (portage package ATOMs with keywords). Delimited by space.\n\nExample: media-libs/libgd ~amd64 sys-kernel/gentoo-kernel -~amd64" \
+		"${INPUTBOX_SIZE[@]}" \
+		"${PACKAGE_KEYWORDS[*]}"
 	
-	while true; do
-		# Create action menu
-		local actions=("add" "edit" "remove" "view" "back")
-		local action_labels=("Add keyword" "Edit keyword" "Remove keyword" "View keywords" "Back to main menu")
-		
-		dialog \
-			--title "Package Keywords Manager" \
-			--menu "Select an action:" \
-			"${MENU_SIZE[@]}" \
-			"${#actions[@]}" \
-			"${actions[@]}" \
-			"${action_labels[@]}"
-		
-		action="$dialog_out"
-		
-		case "$action" in
-			"add")
-				local package_atom keywords
-				dialog \
-					--title "Add Package Keyword" \
-					--form "Enter package atom and keywords:" \
-					"${INPUTBOX_SIZE[@]}" \
-					"Package atom:" 1 1 "" 1 20 50 0 \
-					"Keywords:" 2 1 "" 2 20 50 0
-				
-				package_atom="$(echo "$dialog_out" | head -1)"
-				keywords="$(echo "$dialog_out" | tail -1)"
-				
-				if [[ -n "$package_atom" && -n "$keywords" ]]; then
-					PACKAGE_KEYWORDS+=("$package_atom $keywords")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "Package keyword added successfully!" 6 50
-				fi
-				;;
-			"edit")
-				if [[ ${#PACKAGE_KEYWORDS[@]} -eq 0 ]]; then
-					dialog --msgbox "No package keywords to edit." 6 40
-					continue
-				fi
-				
-				local keyword_index
-				local keywords_display=()
-				for i in "${!PACKAGE_KEYWORDS[@]}"; do
-					keywords_display+=("$i" "${PACKAGE_KEYWORDS[$i]}")
-				done
-				
-				dialog \
-					--title "Edit Package Keyword" \
-					--menu "Select keyword to edit:" \
-					"${INPUTBOX_SIZE[@]}" \
-					"${#keywords_display[@]}" \
-					"${keywords_display[@]}"
-				
-				keyword_index="$dialog_out"
-				if [[ -n "$keyword_index" ]]; then
-					local new_keyword
-					dialog \
-						--title "Edit Package Keyword" \
-						--inputbox "Edit package keyword:" \
-						"${INPUTBOX_SIZE[@]}" \
-						"${PACKAGE_KEYWORDS[$keyword_index]}"
-					
-					new_keyword="$dialog_out"
-					if [[ -n "$new_keyword" ]]; then
-						PACKAGE_KEYWORDS[$keyword_index]="$new_keyword"
-						UNSAVED_CHANGES=true
-						dialog --msgbox "Package keyword updated successfully!" 6 50
-					fi
-				fi
-				;;
-			"remove")
-				if [[ ${#PACKAGE_KEYWORDS[@]} -eq 0 ]]; then
-					dialog --msgbox "No package keywords to remove." 6 40
-					continue
-				fi
-				
-				local keyword_index
-				local keywords_display=()
-				for i in "${!PACKAGE_KEYWORDS[@]}"; do
-					keywords_display+=("$i" "${PACKAGE_KEYWORDS[$i]}")
-				done
-				
-				dialog \
-					--title "Remove Package Keyword" \
-					--menu "Select keyword to remove:" \
-					"${MENU_SIZE[@]}" \
-					"${#keywords_display[@]}" \
-					"${keywords_display[@]}"
-				
-				keyword_index="$dialog_out"
-				if [[ -n "$keyword_index" ]]; then
-					unset "PACKAGE_KEYWORDS[$keyword_index]"
-					PACKAGE_KEYWORDS=("${PACKAGE_KEYWORDS[@]}")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "Package keyword removed successfully!" 6 50
-				fi
-				;;
-			"view")
-				if [[ ${#PACKAGE_KEYWORDS[@]} -eq 0 ]]; then
-					dialog --msgbox "No package keywords configured." 6 40
-				else
-					local keywords_text=""
-					for i in "${!PACKAGE_KEYWORDS[@]}"; do
-						keywords_text+="$((i+1)). ${PACKAGE_KEYWORDS[$i]}\n"
-					done
-					
-					dialog \
-						--title "Current Package Keywords" \
-						--scrolltext \
-						"${HELP_POPUP_SIZE[@]}" \
-						"$keywords_text"
-				fi
-				;;
-			"back")
-				return 0
-				;;
-		esac
-	done
+	# shellcheck disable=SC2206
+	PACKAGE_KEYWORDS=($dialog_out)
+	UNSAVED_CHANGES=true
 }
 
+
 # Accept keywords manager
-function accept_keywords_manager() {
-	local action
-	local current_keywords=("${ACCEPT_KEYWORDS[@]}")
-	
-	while true; do
-		# Create action menu
-		local actions=("add" "edit" "remove" "view" "back")
-		local action_labels=("Add keyword" "Edit keyword" "Remove keyword" "View keywords" "Back to main menu")
-		
-		dialog \
-			--title "Accept Keywords Manager" \
-			--menu "Select an action:" \
-			"${MENU_SIZE[@]}" \
-			"${#actions[@]}" \
-			"${actions[@]}" \
-			"${action_labels[@]}"
-		
-		action="$dialog_out"
-		
-		case "$action" in
-			"add")
-				local keyword
-				dialog \
-					--title "Add Accept Keyword" \
-					--inputbox "Enter keyword to accept (e.g., ~amd64):" \
-					"${INPUTBOX_SIZE[@]}" \
-					""
-				
-				keyword="$dialog_out"
-				if [[ -n "$keyword" ]]; then
-					ACCEPT_KEYWORDS+=("$keyword")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "Accept keyword added successfully!" 6 50
-				fi
-				;;
-			"edit")
-				if [[ ${#ACCEPT_KEYWORDS[@]} -eq 0 ]]; then
-					dialog --msgbox "No accept keywords to edit." 6 40
-					continue
-				fi
-				
-				local keyword_index
-				local keywords_display=()
-				for i in "${!ACCEPT_KEYWORDS[@]}"; do
-					keywords_display+=("$i" "${ACCEPT_KEYWORDS[$i]}")
-				done
-				
-				dialog \
-					--title "Edit Accept Keyword" \
-					--menu "Select keyword to edit:" \
-					"${MENU_SIZE[@]}" \
-					"${#keywords_display[@]}" \
-					"${keywords_display[@]}"
-				
-				keyword_index="$dialog_out"
-				if [[ -n "$keyword_index" ]]; then
-					local new_keyword
-					dialog \
-						--title "Edit Accept Keyword" \
-						--inputbox "Edit accept keyword:" \
-						"${INPUTBOX_SIZE[@]}" \
-						"${ACCEPT_KEYWORDS[$keyword_index]}"
-					
-					new_keyword="$dialog_out"
-					if [[ -n "$new_keyword" ]]; then
-						ACCEPT_KEYWORDS[$keyword_index]="$new_keyword"
-						UNSAVED_CHANGES=true
-						dialog --msgbox "Accept keyword updated successfully!" 6 50
-					fi
-				fi
-				;;
-			"remove")
-				if [[ ${#ACCEPT_KEYWORDS[@]} -eq 0 ]]; then
-					dialog --msgbox "No accept keywords to remove." 6 40
-					continue
-				fi
-				
-				local keyword_index
-				local keywords_display=()
-				for i in "${!ACCEPT_KEYWORDS[@]}"; do
-					keywords_display+=("$i" "${ACCEPT_KEYWORDS[$i]}")
-				done
-				
-				dialog \
-					--title "Remove Accept Keyword" \
-					--menu "Select keyword to remove:" \
-					"${MENU_SIZE[@]}" \
-					"${#keywords_display[@]}" \
-					"${keywords_display[@]}"
-				
-				keyword_index="$dialog_out"
-				if [[ -n "$keyword_index" ]]; then
-					unset "ACCEPT_KEYWORDS[$keyword_index]"
-					ACCEPT_KEYWORDS=("${ACCEPT_KEYWORDS[@]}")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "Accept keyword removed successfully!" 6 50
-				fi
-				;;
-			"view")
-				if [[ ${#ACCEPT_KEYWORDS[@]} -eq 0 ]]; then
-					dialog --msgbox "No accept keywords configured." 6 40
-				else
-					local keywords_text=""
-					for i in "${!ACCEPT_KEYWORDS[@]}"; do
-						keywords_text+="$((i+1)). ${ACCEPT_KEYWORDS[$i]}\n"
-					done
-					
-					dialog \
-						--title "Current Accept Keywords" \
-						--scrolltext \
-						"${HELP_POPUP_SIZE[@]}" \
-						"$keywords_text"
-				fi
-				;;
-			"back")
-				return 0
-				;;
-		esac
-	done
-}
+
+
 
 # Overlay manager
 function overlay_manager() {
@@ -2564,7 +2215,6 @@ ENABLE_GPU_BENCHMARKING=${ENABLE_GPU_BENCHMARKING@Q}
 
 PACKAGE_USE_RULES=(${PACKAGE_USE_RULES[@]@Q})
 PACKAGE_KEYWORDS=(${PACKAGE_KEYWORDS[@]@Q})
-ACCEPT_KEYWORDS=(${ACCEPT_KEYWORDS[@]@Q})
 OVERLAY_URLS=(${OVERLAY_URLS[@]@Q})
 OVERLAY_NAMES=(${OVERLAY_NAMES[@]@Q})
 
