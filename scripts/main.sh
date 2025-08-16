@@ -665,13 +665,13 @@ function configure_bootloader() {
 	
 	# Verify kernel files exist
 	einfo "Verifying kernel installation"
-	if [[ ! -f /boot/vmlinuz-* ]]; then
+	if ! ls /boot/{vmlinuz,kernel}-* 1> /dev/null 2>&1; then
 		ewarn "No kernel image found in /boot"
 		ls -la /boot/ || true
 		ls -la /usr/src/ || true
 	fi
 	
-	if [[ ! -f /boot/initramfs-* ]]; then
+	if ! ls /boot/initramfs-* 1> /dev/null 2>&1; then
 		ewarn "No initramfs found in /boot"
 		ls -la /boot/ || true
 	fi
@@ -1239,6 +1239,9 @@ function get_disk_device_from_partition() {
 	
 	# Get the partition device from the partition ID
 	partition_device="$(resolve_device_by_id "$partition_id")"
+	
+	# NEW: Resolve the real path to handle symbolic links correctly
+	partition_device="$(realpath "$partition_device")"
 	
 	# Extract the disk device from the partition device
 	# Handle various device naming patterns:
