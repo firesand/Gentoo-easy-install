@@ -951,12 +951,7 @@ function install_performance_optimization() {
 	try emerge --verbose app-misc/resolve-march-native
 	
 	# Install system monitoring tools
-	try emerge --verbose sys-process/htop
-	try emerge --verbose sys-process/iotop
 	try emerge --verbose sys-process/btop
-	
-	# Install performance tuning tools
-	try ACCEPT_KEYWORDS="~amd64" emerge -av sys-apps/tuned
 	
 	# Configure performance settings
 	einfo "Configuring performance optimization"
