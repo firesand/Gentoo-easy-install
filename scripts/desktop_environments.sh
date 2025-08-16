@@ -3,11 +3,10 @@
 
 # Desktop Environment packages
 declare -A DE_PACKAGES=(
-    [kde]="kde-plasma/plasma-meta kde-apps/meta"
+    [kde]="kde-plasma/plasma-meta"
     [gnome]="gnome-base/gnome"
     [hyprland]="gui-wm/hyprland"
     [xfce]="xfce-base/xfce4-meta"
-    [lxqt]="lxqt-base/lxqt-meta"
     [cinnamon]="gnome-extra/cinnamon"
     [mate]="mate-base/mate"
     [budgie]="gnome-extra/budgie-desktop"
@@ -15,8 +14,6 @@ declare -A DE_PACKAGES=(
     [sway]="gui-wm/sway"
     [openbox]="gui-wm/openbox"
     [fluxbox]="gui-wm/fluxbox"
-    [enlightenment]="gui-wm/enlightenment"
-    [pantheon]="pantheon-desktop"
 )
 
 # Display manager packages
@@ -40,7 +37,6 @@ declare -A DE_DEFAULT_DM=(
     [gnome]="gdm"
     [hyprland]="none"
     [xfce]="lightdm"
-    [lxqt]="sddm"
     [cinnamon]="lightdm"
     [mate]="lightdm"
     [budgie]="lightdm"
@@ -48,8 +44,6 @@ declare -A DE_DEFAULT_DM=(
     [sway]="none"
     [openbox]="lightdm"
     [fluxbox]="lightdm"
-    [enlightenment]="lightdm"
-    [pantheon]="lightdm"
 )
 
 # Default network manager for each DE
@@ -58,7 +52,6 @@ declare -A DE_DEFAULT_NM=(
     [gnome]="networkmanager"
     [hyprland]="networkmanager"
     [xfce]="networkmanager"
-    [lxqt]="networkmanager"
     [cinnamon]="networkmanager"
     [mate]="networkmanager"
     [budgie]="networkmanager"
@@ -66,8 +59,6 @@ declare -A DE_DEFAULT_NM=(
     [sway]="networkmanager"
     [openbox]="networkmanager"
     [fluxbox]="networkmanager"
-    [enlightenment]="networkmanager"
-    [pantheon]="networkmanager"
 )
 
 # Additional packages that are commonly needed for DEs
@@ -76,7 +67,6 @@ declare -A DE_ADDITIONAL_PACKAGES=(
     [gnome]="gnome-extra/gnome-tweaks gnome-extra/gnome-software"
     [hyprland]="gui-apps/waybar gui-apps/wofi gui-apps/kitty"
     [xfce]="xfce-extra/xfce4-goodies"
-    [lxqt]="lxqt-base/lxqt-panel"
     [cinnamon]="gnome-extra/gnome-tweaks"
     [mate]="mate-extra/mate-tweak"
     [budgie]="gnome-extra/gnome-tweaks"
@@ -84,8 +74,6 @@ declare -A DE_ADDITIONAL_PACKAGES=(
     [sway]="gui-apps/waybar gui-apps/wofi"
     [openbox]="gui-apps/tint2 gui-apps/obconf"
     [fluxbox]="gui-apps/fbsetbg"
-    [enlightenment]="gui-apps/terminology"
-    [pantheon]="pantheon-shell elementary-xfce-icon-theme elementary-xfce-theme"
 )
 
 # Function to get default display manager for a DE
