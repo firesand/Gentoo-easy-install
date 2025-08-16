@@ -437,6 +437,24 @@ function load_default_config() {
 	ENABLE_BINPKG=false
 	ROOT_SSH_AUTHORIZED_KEYS=""
 
+	# Desktop Environment Configuration
+	DESKTOP_ENVIRONMENT=""
+	DESKTOP_ADDITIONAL_PACKAGES=()
+	ENABLE_DISPLAY_MANAGER="auto"
+	ENABLE_NETWORK_MANAGER="auto"
+
+	# GPU Driver Configuration
+	GPU_DRIVER=""
+	GPU_DRIVER_ADDITIONAL_PACKAGES=()
+	ENABLE_VULKAN=true
+	ENABLE_OPENCL=false
+
+	# Performance & Testing Configuration
+	ENABLE_PERFORMANCE_OPTIMIZATION=true
+	ENABLE_VM_TESTING_TOOLS=true
+	ENABLE_DISPLAY_BACKEND_TESTING=true
+	ENABLE_GPU_BENCHMARKING=false
+
 	# All settings are unsaved.
 	UNSAVED_CHANGES=true
 }
@@ -895,6 +913,22 @@ MENU_ITEMS=(
 	"ENABLE_SSHD"
 	"ENABLE_BINPKG"
 	"ROOT_SSH_AUTHORIZED_KEYS"
+	"--------"
+	"DESKTOP_ENVIRONMENT"
+	"DESKTOP_ADDITIONAL_PACKAGES"
+	"ENABLE_DISPLAY_MANAGER"
+	"ENABLE_NETWORK_MANAGER"
+	"--------"
+	"GPU_DRIVER"
+	"GPU_DRIVER_ADDITIONAL_PACKAGES"
+	"ENABLE_VULKAN"
+	"ENABLE_OPENCL"
+	"--------"
+	"ENABLE_PERFORMANCE_OPTIMIZATION"
+	"ENABLE_VM_TESTING_TOOLS"
+	"ENABLE_DISPLAY_BACKEND_TESTING"
+	"ENABLE_GPU_BENCHMARKING"
+	"--------"
 	"ADDITIONAL_PACKAGES"
 )
 
@@ -1580,6 +1614,197 @@ EOF
 	UNSAVED_CHANGES=true
 }
 
+function DESKTOP_ENVIRONMENT_tag()   { echo "Desktop Environment"; }
+function DESKTOP_ENVIRONMENT_label() { echo "(${DESKTOP_ENVIRONMENT:-none})"; }
+function DESKTOP_ENVIRONMENT_show()  { return 0; }
+function DESKTOP_ENVIRONMENT_help()  { echo "Choose your desktop environment. Leave empty for no DE (server/CLI only). Each DE comes with its own set of applications and tools."; }
+function DESKTOP_ENVIRONMENT_menu()  {
+	if menu_radiolist_labeled \
+		"Select Desktop Environment" \
+		"Choose your desktop environment. Each DE provides a complete graphical user interface with applications.\n\nSelect 'none' for server installations or if you prefer to install a DE manually later." \
+		"${DESKTOP_ENVIRONMENT:-none}" \
+		"none" "No desktop environment (server/CLI only)" \
+		"kde" "KDE Plasma - Feature-rich desktop environment" \
+		"gnome" "GNOME - Modern, simple desktop environment" \
+		"hyprland" "Hyprland - Modern Wayland compositor" \
+		"xfce" "XFCE - Lightweight desktop environment" \
+		"lxqt" "LXQt - Lightweight Qt-based desktop" \
+		"cinnamon" "Cinnamon - Traditional desktop environment" \
+		"mate" "MATE - GNOME 2 fork" \
+		"budgie" "Budgie - Modern, elegant desktop" \
+		"i3" "i3 - Tiling window manager" \
+		"sway" "Sway - Wayland tiling window manager" \
+		"openbox" "Openbox - Lightweight window manager" \
+		"fluxbox" "Fluxbox - Lightweight window manager" \
+		"enlightenment" "Enlightenment - Advanced window manager" \
+		"pantheon" "Pantheon - Elementary OS desktop"
+	then
+		DESKTOP_ENVIRONMENT="$dialog_out"
+		[[ "$DESKTOP_ENVIRONMENT" == "none" ]] && DESKTOP_ENVIRONMENT=""
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function DESKTOP_ADDITIONAL_PACKAGES_tag()   { echo " ├ DE Additional packages"; }
+function DESKTOP_ADDITIONAL_PACKAGES_label() { echo " ├ (${#DESKTOP_ADDITIONAL_PACKAGES[@]} packages)"; }
+function DESKTOP_ADDITIONAL_PACKAGES_show()  { [[ -n "$DESKTOP_ENVIRONMENT" ]]; }
+function DESKTOP_ADDITIONAL_PACKAGES_help()  { echo "Enter additional packages specific to your desktop environment that should be installed."; }
+function DESKTOP_ADDITIONAL_PACKAGES_menu()  {
+	dialog \
+		--title "Desktop Environment Additional Packages" \
+		--inputbox "Enter additional DE-specific packages (portage package ATOMs) to install. Delimited by space." \
+		"${INPUTBOX_SIZE[@]}" "${DESKTOP_ADDITIONAL_PACKAGES[*]}"
+	# shellcheck disable=SC2206
+	DESKTOP_ADDITIONAL_PACKAGES=($dialog_out)
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_DISPLAY_MANAGER_tag()   { echo " ├ Display Manager"; }
+function ENABLE_DISPLAY_MANAGER_label() { echo " ├ ($ENABLE_DISPLAY_MANAGER)"; }
+function ENABLE_DISPLAY_MANAGER_show()  { [[ -n "$DESKTOP_ENVIRONMENT" ]]; }
+function ENABLE_DISPLAY_MANAGER_help()  { echo "Choose your display manager (login screen). 'auto' will select the best option for your chosen desktop environment."; }
+function ENABLE_DISPLAY_MANAGER_menu()  {
+	if menu_radiolist_labeled \
+		"Select Display Manager" \
+		"Choose your display manager (login screen).\n\n'auto' will automatically select the best option for your chosen desktop environment.\n\n'none' disables the display manager." \
+		"$ENABLE_DISPLAY_MANAGER" \
+		"auto" "Automatic (DE default)" \
+		"sddm" "SDDM (KDE Plasma default)" \
+		"gdm" "GDM (GNOME default)" \
+		"lightdm" "LightDM (universal)" \
+		"lxdm" "LXDM (lightweight)" \
+		"slim" "SLiM (minimal)" \
+		"none" "No display manager"
+	then
+		ENABLE_DISPLAY_MANAGER="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function ENABLE_NETWORK_MANAGER_tag()   { echo " ├ Network Manager"; }
+function ENABLE_NETWORK_MANAGER_label() { echo " ├ ($ENABLE_NETWORK_MANAGER)"; }
+function ENABLE_NETWORK_MANAGER_show()  { [[ -n "$DESKTOP_ENVIRONMENT" ]]; }
+function ENABLE_NETWORK_MANAGER_help()  { echo "Choose your network manager. 'auto' will select the best option for your chosen desktop environment."; }
+function ENABLE_NETWORK_MANAGER_menu()  {
+	if menu_radiolist_labeled \
+		"Select Network Manager" \
+		"Choose your network manager.\n\n'auto' will automatically select the best option for your chosen desktop environment.\n\n'none' disables the network manager." \
+		"$ENABLE_NETWORK_MANAGER" \
+		"auto" "Automatic (DE default)" \
+		"networkmanager" "NetworkManager (recommended)" \
+		"connman" "ConnMan (lightweight)" \
+		"wicd" "Wicd (minimal)" \
+		"none" "No network manager"
+	then
+		ENABLE_NETWORK_MANAGER="$dialog_out"
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function GPU_DRIVER_tag()   { echo "GPU Driver"; }
+function GPU_DRIVER_label() { echo "(${GPU_DRIVER:-auto})"; }
+function GPU_DRIVER_show()  { return 0; }
+function GPU_DRIVER_help()  { echo "Choose your GPU driver. 'auto' will select the best driver for your chosen desktop environment. Mesa drivers are recommended for maximum compatibility."; }
+function GPU_DRIVER_menu()  {
+	if menu_radiolist_labeled \
+		"Select GPU Driver" \
+		"Choose your GPU driver.\n\n'auto' will automatically select the best driver for your chosen desktop environment.\n\nMesa drivers are recommended for maximum compatibility and Wayland support.\n\nNVIDIA proprietary drivers offer best performance but are closed source." \
+		"${GPU_DRIVER:-auto}" \
+		"auto" "Automatic (DE recommendation)" \
+		"mesa" "Universal Mesa drivers (open-source, best compatibility)" \
+		"amd" "AMD GPU drivers (Mesa-based, recommended for AMD cards)" \
+		"intel" "Intel GPU drivers (Mesa-based, recommended for Intel cards)" \
+		"nvidia" "NVIDIA proprietary drivers (best performance, closed source)" \
+		"nvidia-nvk" "NVIDIA open-source drivers (NVK, experimental)" \
+		"nouveau" "NVIDIA open-source drivers (Nouveau, good compatibility)" \
+		"none" "No GPU drivers (server/CLI only)"
+	then
+		GPU_DRIVER="$dialog_out"
+		[[ "$GPU_DRIVER" == "auto" ]] && GPU_DRIVER=""
+		UNSAVED_CHANGES=true
+	else
+		# Return to menu
+		true
+	fi
+}
+
+function GPU_DRIVER_ADDITIONAL_PACKAGES_tag()   { echo " ├ GPU Additional packages"; }
+function GPU_DRIVER_ADDITIONAL_PACKAGES_label() { echo " ├ (${#GPU_DRIVER_ADDITIONAL_PACKAGES[@]} packages)"; }
+function GPU_DRIVER_ADDITIONAL_PACKAGES_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function GPU_DRIVER_ADDITIONAL_PACKAGES_help()  { echo "Enter additional GPU driver packages that should be installed."; }
+function GPU_DRIVER_ADDITIONAL_PACKAGES_menu()  {
+	dialog \
+		--title "GPU Driver Additional Packages" \
+		--inputbox "Enter additional GPU driver packages (portage package ATOMs) to install. Delimited by space." \
+		"${INPUTBOX_SIZE[@]}" "${GPU_DRIVER_ADDITIONAL_PACKAGES[*]}"
+	# shellcheck disable=SC2206
+	GPU_DRIVER_ADDITIONAL_PACKAGES=($dialog_out)
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_VULKAN_tag()   { echo " ├ Enable Vulkan"; }
+function ENABLE_VULKAN_label() { echo " ├ ($(on_off_label ENABLE_VULKAN))"; }
+function ENABLE_VULKAN_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function ENABLE_VULKAN_help()  { echo "Enable Vulkan support for GPU drivers. Recommended for gaming and modern applications."; }
+function ENABLE_VULKAN_menu()  {
+	on_off_toggle ENABLE_VULKAN
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_OPENCL_tag()   { echo " ├ Enable OpenCL"; }
+function ENABLE_OPENCL_label() { echo " ├ ($(on_off_label ENABLE_OPENCL))"; }
+function ENABLE_OPENCL_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function ENABLE_OPENCL_help()  { echo "Enable OpenCL support for GPU drivers. Useful for compute applications and some games."; }
+function ENABLE_OPENCL_menu()  {
+	on_off_toggle ENABLE_OPENCL
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_PERFORMANCE_OPTIMIZATION_tag()   { echo "Performance Optimization"; }
+function ENABLE_PERFORMANCE_OPTIMIZATION_label() { echo "($(on_off_label ENABLE_PERFORMANCE_OPTIMIZATION))"; }
+function ENABLE_PERFORMANCE_OPTIMIZATION_show()  { return 0; }
+function ENABLE_PERFORMANCE_OPTIMIZATION_help()  { echo "Enable performance optimization features including CPU tuning, memory optimization, and system tweaks for better VM performance."; }
+function ENABLE_PERFORMANCE_OPTIMIZATION_menu()  {
+	on_off_toggle ENABLE_PERFORMANCE_OPTIMIZATION
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_VM_TESTING_TOOLS_tag()   { echo "VM Testing Tools"; }
+function ENABLE_VM_TESTING_TOOLS_label() { echo "($(on_off_label ENABLE_VM_TESTING_TOOLS))"; }
+function ENABLE_VM_TESTING_TOOLS_show()  { return 0; }
+function ENABLE_VM_TESTING_TOOLS_help()  { echo "Install comprehensive VM testing and management tools including launchers, performance monitors, and configuration utilities."; }
+function ENABLE_VM_TESTING_TOOLS_menu()  {
+	on_off_toggle ENABLE_VM_TESTING_TOOLS
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_DISPLAY_BACKEND_TESTING_tag()   { echo "Display Backend Testing"; }
+function ENABLE_DISPLAY_BACKEND_TESTING_label() { echo "($(on_off_label ENABLE_DISPLAY_BACKEND_TESTING))"; }
+function ENABLE_DISPLAY_BACKEND_TESTING_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function ENABLE_DISPLAY_BACKEND_TESTING_help()  { echo "Enable display backend testing tools for optimizing GTK, SDL, and SPICE performance in VM environments."; }
+function ENABLE_DISPLAY_BACKEND_TESTING_menu()  {
+	on_off_toggle ENABLE_DISPLAY_BACKEND_TESTING
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_GPU_BENCHMARKING_tag()   { echo "GPU Benchmarking"; }
+function ENABLE_GPU_BENCHMARKING_label() { echo "($(on_off_label ENABLE_GPU_BENCHMARKING))"; }
+function ENABLE_GPU_BENCHMARKING_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function ENABLE_GPU_BENCHMARKING_help()  { echo "Enable GPU benchmarking tools for performance testing and optimization in VM environments."; }
+function ENABLE_GPU_BENCHMARKING_menu()  {
+	on_off_toggle ENABLE_GPU_BENCHMARKING
+	UNSAVED_CHANGES=true
+}
+
 function ADDITIONAL_PACKAGES_tag()   { echo "Additional packages"; }
 function ADDITIONAL_PACKAGES_label() { echo "${#ADDITIONAL_PACKAGES[@]} packages"; }
 function ADDITIONAL_PACKAGES_show()  { return 0; }
@@ -1660,6 +1885,33 @@ ADDITIONAL_PACKAGES=(${ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_SSHD=${ENABLE_SSHD@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
+
+
+################################################
+# Desktop Environment Configuration
+
+DESKTOP_ENVIRONMENT=${DESKTOP_ENVIRONMENT@Q}
+DESKTOP_ADDITIONAL_PACKAGES=(${DESKTOP_ADDITIONAL_PACKAGES[@]@Q})
+ENABLE_DISPLAY_MANAGER=${ENABLE_DISPLAY_MANAGER@Q}
+ENABLE_NETWORK_MANAGER=${ENABLE_NETWORK_MANAGER@Q}
+
+
+################################################
+# GPU Driver Configuration
+
+GPU_DRIVER=${GPU_DRIVER@Q}
+GPU_DRIVER_ADDITIONAL_PACKAGES=(${GPU_DRIVER_ADDITIONAL_PACKAGES[@]@Q})
+ENABLE_VULKAN=${ENABLE_VULKAN@Q}
+ENABLE_OPENCL=${ENABLE_OPENCL@Q}
+
+
+################################################
+# Performance & Testing Configuration
+
+ENABLE_PERFORMANCE_OPTIMIZATION=${ENABLE_PERFORMANCE_OPTIMIZATION@Q}
+ENABLE_VM_TESTING_TOOLS=${ENABLE_VM_TESTING_TOOLS@Q}
+ENABLE_DISPLAY_BACKEND_TESTING=${ENABLE_DISPLAY_BACKEND_TESTING@Q}
+ENABLE_GPU_BENCHMARKING=${ENABLE_GPU_BENCHMARKING@Q}
 
 
 ################################################
