@@ -537,20 +537,6 @@ EOF
 	[[ $USED_BTRFS == "true" ]] && modules+=("btrfs")
 	[[ $USED_ZFS == "true" ]] && modules+=("zfs")
 	
-	# Add virtio modules for VM compatibility (only if they exist)
-	if [[ -d /lib/modules/"$kver"/kernel/drivers/virtio ]]; then
-		modules+=("virtio")
-	fi
-	if [[ -d /lib/modules/"$kver"/kernel/drivers/virtio ]]; then
-		modules+=("virtio_pci")
-	fi
-	if [[ -d /lib/modules/"$kver"/kernel/drivers/net/virtio ]]; then
-		modules+=("virtio_net")
-	fi
-	if [[ -d /lib/modules/"$kver"/kernel/drivers/block/virtio ]]; then
-		modules+=("virtio_blk")
-	fi
-	
 	# Ensure we have at least basic modules
 	[[ ${#modules[@]} -eq 0 ]] && modules=("bash")
 	
