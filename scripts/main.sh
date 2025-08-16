@@ -574,7 +574,11 @@ function configure_bootloader() {
 		grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=gentoo
 	else
 		einfo "Installing BIOS bootloader"
-		grub-install "$DISK_DEVICE"
+		# Get the disk device from the root partition ID
+		local disk_device
+		disk_device="$(get_disk_device_from_partition "$DISK_ID_ROOT")"
+		einfo "Installing GRUB to disk: $disk_device"
+		grub-install "$disk_device"
 	fi
 	
 	# Generate GRUB configuration
@@ -1141,4 +1145,24 @@ EOF
 	fi
 	
 	einfo "Package management configuration applied successfully"
+}
+
+function get_disk_device_from_partition() {
+	local partition_id="$1"
+	local partition_device
+	
+	# Get the partition device from the partition ID
+	partition_device="$(resolve_device_by_id "$partition_id")"
+	
+	# Extract the disk device from the partition device
+	# For example: /dev/sda1 -> /dev/sda
+	local disk_device
+	if [[ "$partition_device" =~ ^(/dev/[a-z]+)[0-9]+$ ]]; then
+		disk_device="${BASH_REMATCH[1]}"
+	else
+		# If it doesn't match the pattern, try to get the parent device
+		disk_device="$(dirname "$partition_device")"
+	fi
+	
+	echo "$disk_device"
 }
