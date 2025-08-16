@@ -826,16 +826,69 @@ function bind_repo_dir() {
 		|| die "Could not bind mount '$GENTOO_INSTALL_REPO_DIR_ORIGINAL' to '$GENTOO_INSTALL_REPO_BIND'"
 }
 
+function show_stage3_info() {
+	local stage3_type="$1"
+	local desktop_env="$2"
+	
+	einfo "=== Stage 3 Selection Information ==="
+	if [[ -n "$desktop_env" ]]; then
+		einfo "Desktop Environment: $desktop_env"
+		einfo "Stage 3 Type: Desktop Profile ($stage3_type)"
+		einfo "Benefits:"
+		einfo "  - Pre-configured USE flags for desktop environments"
+		einfo "  - Optimized for desktop usage"
+		einfo "  - Includes common desktop packages and configurations"
+		einfo "  - Faster desktop environment setup"
+	else
+		einfo "Desktop Environment: None (Server/CLI mode)"
+		einfo "Stage 3 Type: Standard Profile ($stage3_type)"
+		einfo "Benefits:"
+		einfo "  - Minimal base system"
+		einfo "  - Lightweight installation"
+		einfo "  - Suitable for servers and minimal systems"
+	fi
+	einfo "Architecture: $GENTOO_ARCH"
+	einfo "Init System: $STAGE3_VARIANT"
+	einfo "====================================="
+}
+
 function download_stage3() {
 	cd "$TMP_DIR" \
 		|| die "Could not cd into '$TMP_DIR'"
 
 	local STAGE3_BASENAME_FINAL
-	if [[ ("$GENTOO_ARCH" == "amd64" && "$STAGE3_VARIANT" == *x32*) || ("$GENTOO_ARCH" == "x86" && -n "$GENTOO_SUBARCH") ]]; then
-		STAGE3_BASENAME_FINAL="$STAGE3_BASENAME_CUSTOM"
+	local stage3_type
+	
+	# Check if user selected a desktop environment
+	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		einfo "Desktop environment selected: $DESKTOP_ENVIRONMENT"
+		einfo "Will download desktop profile Stage 3 for better DE support"
+		
+		# Use desktop profile Stage 3
+		if [[ "$STAGE3_VARIANT" == *systemd* ]]; then
+			STAGE3_BASENAME_FINAL="stage3-$GENTOO_ARCH-desktop-systemd"
+			stage3_type="desktop-systemd"
+		else
+			STAGE3_BASENAME_FINAL="stage3-$GENTOO_ARCH-desktop-openrc"
+			stage3_type="desktop-openrc"
+		fi
+		
+		einfo "Selected desktop profile: $STAGE3_BASENAME_FINAL"
 	else
-		STAGE3_BASENAME_FINAL="$STAGE3_BASENAME"
+		einfo "No desktop environment selected, using standard Stage 3"
+		
+		# Use standard Stage 3 (existing logic)
+		if [[ ("$GENTOO_ARCH" == "amd64" && "$STAGE3_VARIANT" == *x32*) || ("$GENTOO_ARCH" == "x86" && -n "$GENTOO_SUBARCH") ]]; then
+			STAGE3_BASENAME_FINAL="$STAGE3_BASENAME_CUSTOM"
+			stage3_type="custom"
+		else
+			STAGE3_BASENAME_FINAL="$STAGE3_BASENAME"
+			stage3_type="standard"
+		fi
 	fi
+
+	# Show Stage 3 information to user
+	show_stage3_info "$stage3_type" "$DESKTOP_ENVIRONMENT"
 
 	local STAGE3_RELEASES="$GENTOO_MIRROR/releases/$GENTOO_ARCH/autobuilds/current-$STAGE3_BASENAME_FINAL/"
 
