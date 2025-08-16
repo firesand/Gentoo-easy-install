@@ -552,11 +552,7 @@ function install_system_tools() {
 		install_performance_optimization
 	fi
 	
-	# Install VM testing tools if enabled
-	if [[ "$ENABLE_VM_TESTING_TOOLS" == "true" ]]; then
-		einfo "Installing VM testing tools"
-		install_vm_testing_tools
-	fi
+
 	
 	# Install additional packages specified by user
 	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
@@ -985,47 +981,7 @@ function install_performance_optimization() {
 	maybe_exec 'after_install_performance_optimization'
 }
 
-function install_vm_testing_tools() {
-	[[ "$ENABLE_VM_TESTING_TOOLS" != "true" ]] && return 0
-	
-	maybe_exec 'before_install_vm_testing_tools'
-	
-	einfo "Installing VM testing and management tools"
-	
-	# Install QEMU and KVM tools
-	try emerge --verbose app-emulation/qemu
-	try emerge --verbose app-emulation/libvirt
-	try emerge --verbose app-emulation/virt-manager
-	
-	# Install VM performance monitoring tools
-	try emerge --verbose sys-process/htop
-	try emerge --verbose sys-process/iotop
-	try emerge --verbose sys-apps/sysstat
-	
-	# Install network testing tools
-	try emerge --verbose net-analyzer/iperf3
-	try emerge --verbose net-analyzer/nethogs
-	
-	# Copy VM testing scripts to /usr/local/bin
-	einfo "Installing VM testing scripts"
-	mkdir_or_die 0755 "/usr/local/bin"
-	
-	# Copy the enhanced VM testing tools
-	if [[ -d "$GENTOO_INSTALL_REPO_DIR/tests" ]]; then
-		cp -r "$GENTOO_INSTALL_REPO_DIR/tests" /usr/local/share/gentoo-vm-tools/
-		chmod +x /usr/local/share/gentoo-vm-tools/tests/*.sh
-		
-		# Create symlinks for easy access
-		ln -sf /usr/local/share/gentoo-vm-tools/tests/gentoo-vm-launcher.sh /usr/local/bin/gentoo-vm-launcher
-		ln -sf /usr/local/share/gentoo-vm-tools/tests/enhanced-vm-launcher.sh /usr/local/bin/enhanced-vm-launcher
-		ln -sf /usr/local/share/gentoo-vm-tools/tests/test-display-backends.sh /usr/local/bin/test-display-backends
-		
-		einfo "VM testing tools installed to /usr/local/share/gentoo-vm-tools/"
-		einfo "Quick access commands: gentoo-vm-launcher, enhanced-vm-launcher, test-display-backends"
-	fi
-	
-	maybe_exec 'after_install_vm_testing_tools'
-}
+
 
 function install_display_backend_testing() {
 	[[ "$ENABLE_DISPLAY_BACKEND_TESTING" != "true" ]] && return 0

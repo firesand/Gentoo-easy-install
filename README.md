@@ -1,6 +1,6 @@
 ## About Gentoo Easy Install
 
-This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/gentoo-install) with enhanced VM testing tools and additional features. It aspires to be your favourite way to install Gentoo.
+This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/gentoo-install) with enhanced features and additional functionality. It aspires to be your favourite way to install Gentoo.
 It aims to provide a smooth installation experience, both for beginners and experts.
 You may configure it by using a menuconfig-inspired interface or simply via a config file.
 
@@ -256,7 +256,7 @@ other signatures and may cause blkid to find ambiguous information.
 
 This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/gentoo-install) with additional enhancements:
 
-- **Enhanced VM Testing Tools**: Comprehensive VM management and testing suite
+
 - **Performance Optimization**: Advanced display backend testing and GPU optimization
 - **Extended Documentation**: Detailed guides for various use cases
 - **Additional Scripts**: Device management, storage management, and more

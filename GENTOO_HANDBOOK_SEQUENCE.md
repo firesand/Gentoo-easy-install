@@ -97,7 +97,7 @@ Our installer now follows these specific Handbook sections:
 
 ### **Step 8: Tools**
 - Install performance tools (if enabled)
-- Install VM testing tools (if enabled)
+
 - Install additional packages
 
 ### **Step 9: Bootloader**

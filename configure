@@ -533,7 +533,6 @@ function load_default_config() {
 
 	# Performance & Testing Configuration
 	ENABLE_PERFORMANCE_OPTIMIZATION=true
-	ENABLE_VM_TESTING_TOOLS=true
 	ENABLE_DISPLAY_BACKEND_TESTING=true
 	ENABLE_GPU_BENCHMARKING=false
 
@@ -1013,7 +1012,6 @@ MENU_ITEMS=(
 	"ENABLE_OPENCL"
 	"--------"
 	"ENABLE_PERFORMANCE_OPTIMIZATION"
-	"ENABLE_VM_TESTING_TOOLS"
 	"ENABLE_DISPLAY_BACKEND_TESTING"
 	"ENABLE_GPU_BENCHMARKING"
 	"--------"
@@ -1880,14 +1878,7 @@ function ENABLE_PERFORMANCE_OPTIMIZATION_menu()  {
 	UNSAVED_CHANGES=true
 }
 
-function ENABLE_VM_TESTING_TOOLS_tag()   { echo "VM Testing Tools"; }
-function ENABLE_VM_TESTING_TOOLS_label() { echo "($(on_off_label ENABLE_VM_TESTING_TOOLS))"; }
-function ENABLE_VM_TESTING_TOOLS_show()  { return 0; }
-function ENABLE_VM_TESTING_TOOLS_help()  { echo "Install comprehensive VM testing and management tools including launchers, performance monitors, and configuration utilities."; }
-function ENABLE_VM_TESTING_TOOLS_menu()  {
-	on_off_toggle ENABLE_VM_TESTING_TOOLS
-	UNSAVED_CHANGES=true
-}
+
 
 function ENABLE_DISPLAY_BACKEND_TESTING_tag()   { echo "Display Backend Testing"; }
 function ENABLE_DISPLAY_BACKEND_TESTING_label() { echo "($(on_off_label ENABLE_DISPLAY_BACKEND_TESTING))"; }
@@ -2203,7 +2194,6 @@ ENABLE_OPENCL=${ENABLE_OPENCL@Q}
 # Performance & Testing Configuration
 
 ENABLE_PERFORMANCE_OPTIMIZATION=${ENABLE_PERFORMANCE_OPTIMIZATION@Q}
-ENABLE_VM_TESTING_TOOLS=${ENABLE_VM_TESTING_TOOLS@Q}
 ENABLE_DISPLAY_BACKEND_TESTING=${ENABLE_DISPLAY_BACKEND_TESTING@Q}
 ENABLE_GPU_BENCHMARKING=${ENABLE_GPU_BENCHMARKING@Q}
 
