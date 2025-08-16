@@ -1,6 +1,6 @@
-## About gentoo-install
+## About Gentoo Easy Install
 
-This project aspires to be your favourite way to install gentoo.
+This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/gentoo-install) with enhanced VM testing tools and additional features. It aspires to be your favourite way to install Gentoo.
 It aims to provide a smooth installation experience, both for beginners and experts.
 You may configure it by using a menuconfig-inspired interface or simply via a config file.
 
@@ -33,8 +33,8 @@ Afterwards, proceed with the following steps:
 
 ```bash
 pacman -Sy git  # (Archlinux) Install git in live environment, then clone:
-git clone "https://github.com/oddlama/gentoo-install"
-cd gentoo-install
+git clone "https://github.com/YOUR_USERNAME/Gentoo-easy-install"
+cd Gentoo-easy-install
 ./configure     # configure to your liking, save as gentoo.conf
 ./install       # begin installation
 ```
@@ -63,8 +63,9 @@ with some parts depending on the chosen configuration:
 3. Setup portage (initial rsync/git sync, run mirrorselect, create zz-autounmask files)
 4. Base system configuration (hostname, timezone, keymap, locales)
 5. Install required packages (git, kernel, ...)
-6. Make system bootable (generate fstab, build initramfs, create efibootmgr/syslinux boot entry)
-7. Ensure minimal working system (automatic wired networking, install eix, set root password)
+6. Install desktop environment (if specified)
+7. Make system bootable (generate fstab, build initramfs, create efibootmgr/syslinux boot entry)
+8. Ensure minimal working system (automatic wired networking, install eix, set root password)
    - (Optional) Install sshd with secure config (no password logins)
    - (Optional) Install additional packages provided in config
 
@@ -88,6 +89,39 @@ and only allow root to login.
 
 You can provide keys that will be written to root's `.ssh/authorized_keys` file. This will allow
 you to directly continue your setup with your favourite infrastructure management software.
+
+### (Optional) Desktop Environment
+
+The installer supports installing popular desktop environments including:
+- **KDE Plasma** - Feature-rich desktop with extensive customization
+- **GNOME** - Modern, simple desktop environment
+- **Hyprland** - Modern Wayland compositor with tiling
+- **XFCE** - Lightweight, traditional desktop
+- **LXQt** - Lightweight Qt-based desktop
+- **Cinnamon** - Traditional desktop environment
+- **MATE** - GNOME 2 fork
+- **Budgie** - Modern, elegant desktop
+- **i3/Sway** - Tiling window managers
+- **Openbox/Fluxbox** - Lightweight window managers
+- **Enlightenment** - Advanced window manager
+
+Each DE comes with appropriate display and network managers configured automatically.
+
+### (Optional) GPU Drivers
+
+The installer supports installing and configuring GPU drivers for optimal graphics performance:
+
+- **AMD GPU**: Mesa-based drivers with full Vulkan and OpenCL support
+- **NVIDIA GPU**: Proprietary drivers for best performance, or open-source alternatives (NVK/Nouveau)
+- **Intel GPU**: Mesa-based drivers with excellent Wayland support
+- **Universal Mesa**: Open-source drivers supporting all major GPU vendors
+
+Features include:
+- **Automatic Detection**: Smart driver selection based on desktop environment
+- **Vulkan Support**: Modern graphics API support for gaming and applications
+- **OpenCL Support**: Compute acceleration for scientific and creative applications
+- **Wayland Compatibility**: Full Wayland support for modern display protocols
+- **Gentoo Optimizations**: Proper USE flags and kernel module configuration
 
 ### (Optional) Additional packages
 
@@ -217,3 +251,14 @@ other signatures and may cause blkid to find ambiguous information.
 
 * [Gentoo AMD64 Handbook](https://wiki.gentoo.org/wiki/Handbook:AMD64)
 * [Sakaki's EFI Install Guide](https://wiki.gentoo.org/wiki/Sakaki%27s_EFI_Install_Guide)
+
+## Attribution
+
+This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/gentoo-install) with additional enhancements:
+
+- **Enhanced VM Testing Tools**: Comprehensive VM management and testing suite
+- **Performance Optimization**: Advanced display backend testing and GPU optimization
+- **Extended Documentation**: Detailed guides for various use cases
+- **Additional Scripts**: Device management, storage management, and more
+
+Original project by [oddlama](https://github.com/oddlama) - thank you for the excellent foundation!

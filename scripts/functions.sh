@@ -1013,3 +1013,57 @@ function enable_service() {
 		try rc-update add "$1" default
 	fi
 }
+
+function enable_display_manager() {
+	local dm="$1"
+	einfo "Enabling display manager: $dm"
+	
+	case "$dm" in
+		sddm)
+			if [[ $SYSTEMD == "true" ]]; then
+				enable_service sddm
+			else
+				# For OpenRC, we need to create a display-manager service
+				echo 'DISPLAYMANAGER="sddm"' > /etc/conf.d/display-manager
+				enable_service display-manager
+			fi
+			;;
+		gdm)
+			enable_service gdm
+			;;
+		lightdm)
+			enable_service lightdm
+			;;
+		lxdm)
+			enable_service lxdm
+			;;
+		slim)
+			enable_service slim
+			;;
+		*)
+			ewarn "Unknown display manager: $dm"
+			return 1
+			;;
+	esac
+}
+
+function enable_network_manager() {
+	local nm="$1"
+	einfo "Enabling network manager: $nm"
+	
+	case "$nm" in
+		networkmanager)
+			enable_service NetworkManager
+			;;
+		connman)
+			enable_service connman
+			;;
+		wicd)
+			enable_service wicd
+			;;
+		*)
+			ewarn "Unknown network manager: $nm"
+			return 1
+			;;
+	esac
+}

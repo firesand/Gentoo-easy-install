@@ -1,6 +1,9 @@
 # shellcheck source=./scripts/protection.sh
 source "$GENTOO_INSTALL_REPO_DIR/scripts/protection.sh" || exit 1
 
+# shellcheck source=./scripts/desktop_environments.sh
+source "$GENTOO_INSTALL_REPO_DIR/scripts/desktop_environments.sh" || exit 1
+
 
 ################################################
 # Functions
@@ -531,6 +534,18 @@ EOF
 		enable_sshd
 	fi
 
+	# Install desktop environment if specified
+	install_desktop_environment
+
+	# Configure desktop environment services
+	configure_desktop_services
+
+	# Install GPU drivers if specified
+	install_gpu_drivers
+
+	# Configure GPU drivers
+	configure_gpu_drivers
+
 	# Install additional packages, if any.
 	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
 		einfo "Installing additional packages"
@@ -562,6 +577,264 @@ EOF
 		&& einfo "A backup of your luks headers can be found at '$LUKS_HEADER_BACKUP_DIR', in case you want to have a backup."
 	einfo "You may now reboot your system or execute ./install --chroot $ROOT_MOUNTPOINT to enter your system in a chroot."
 	einfo "Chrooting in this way is always possible in case you need to fix something after rebooting."
+}
+
+function install_desktop_environment() {
+	[[ -z "$DESKTOP_ENVIRONMENT" ]] && return 0
+	
+	maybe_exec 'before_install_desktop_environment'
+	
+	einfo "Installing desktop environment: $DESKTOP_ENVIRONMENT"
+	
+	# Check if DE requires systemd but we're using OpenRC
+	if [[ "$(de_requires_systemd "$DESKTOP_ENVIRONMENT")" == "true" && "$SYSTEMD" != "true" ]]; then
+		ewarn "Warning: $DESKTOP_ENVIRONMENT requires systemd, but you're using OpenRC"
+		ewarn "Installation may fail or the DE may not work properly"
+		if ! ask "Continue with $DESKTOP_ENVIRONMENT installation?"; then
+			return 1
+		fi
+	fi
+	
+	# Install DE packages
+	local de_packages="${DE_PACKAGES[$DESKTOP_ENVIRONMENT]}"
+	if [[ -n "$de_packages" ]]; then
+		einfo "Installing $DESKTOP_ENVIRONMENT packages: $de_packages"
+		try emerge --verbose $de_packages
+	else
+		ewarn "No package definition found for $DESKTOP_ENVIRONMENT"
+		return 1
+	fi
+	
+	# Install additional DE packages
+	local additional_packages="${DE_ADDITIONAL_PACKAGES[$DESKTOP_ENVIRONMENT]}"
+	if [[ -n "$additional_packages" ]]; then
+		einfo "Installing additional $DESKTOP_ENVIRONMENT packages: $additional_packages"
+		try emerge --verbose $additional_packages
+	fi
+	
+	# Install user-specified additional packages
+	if [[ ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+		einfo "Installing user-specified additional packages: ${DESKTOP_ADDITIONAL_PACKAGES[*]}"
+		try emerge --verbose "${DESKTOP_ADDITIONAL_PACKAGES[@]}"
+	fi
+	
+	maybe_exec 'after_install_desktop_environment'
+}
+
+function install_display_manager() {
+	[[ "$ENABLE_DISPLAY_MANAGER" == "none" ]] && return 0
+	
+	local dm="$ENABLE_DISPLAY_MANAGER"
+	[[ "$dm" == "auto" ]] && dm="$(get_default_dm_for_de "$DESKTOP_ENVIRONMENT")"
+	[[ "$dm" == "none" ]] && return 0
+	
+	einfo "Installing display manager: $dm"
+	
+	local dm_package="${DM_PACKAGES[$dm]}"
+	if [[ -n "$dm_package" ]]; then
+		try emerge --verbose "$dm_package"
+	else
+		ewarn "No package definition found for display manager: $dm"
+		return 1
+	fi
+}
+
+function install_network_manager() {
+	[[ "$ENABLE_NETWORK_MANAGER" == "none" ]] && return 0
+	
+	local nm="$ENABLE_NETWORK_MANAGER"
+	[[ "$nm" == "auto" ]] && nm="$(get_default_nm_for_de "$DESKTOP_ENVIRONMENT")"
+	[[ "$nm" == "none" ]] && return 0
+	
+	einfo "Installing network manager: $nm"
+	
+	local nm_package="${NM_PACKAGES[$nm]}"
+	if [[ -n "$nm_package" ]]; then
+		try emerge --verbose "$nm_package"
+	else
+		ewarn "No package definition found for network manager: $nm"
+		return 1
+	fi
+}
+
+function configure_desktop_services() {
+	[[ -z "$DESKTOP_ENVIRONMENT" ]] && return 0
+	
+	maybe_exec 'before_configure_desktop_services'
+	
+	einfo "Configuring desktop environment services"
+	
+	# Enable display manager
+	if [[ "$ENABLE_DISPLAY_MANAGER" != "none" ]]; then
+		local dm="${ENABLE_DISPLAY_MANAGER:-auto}"
+		[[ "$dm" == "auto" ]] && dm="$(get_default_dm_for_de "$DESKTOP_ENVIRONMENT")"
+		if [[ "$dm" != "none" ]]; then
+			enable_display_manager "$dm"
+		fi
+	fi
+	
+	# Enable network manager if needed
+	if [[ "$ENABLE_NETWORK_MANAGER" != "none" ]]; then
+		local nm="${ENABLE_NETWORK_MANAGER:-auto}"
+		[[ "$nm" == "auto" ]] && nm="$(get_default_nm_for_de "$DESKTOP_ENVIRONMENT")"
+		if [[ "$nm" != "none" ]]; then
+			enable_network_manager "$nm"
+		fi
+	fi
+	
+	maybe_exec 'after_configure_desktop_services'
+}
+
+function install_gpu_drivers() {
+	# Auto-detect GPU driver if not specified
+	if [[ -z "$GPU_DRIVER" ]]; then
+		if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+			GPU_DRIVER="$(get_recommended_gpu_driver_for_de "$DESKTOP_ENVIRONMENT")"
+			einfo "Auto-detected GPU driver: $GPU_DRIVER (recommended for $DESKTOP_ENVIRONMENT)"
+		else
+			return 0
+		fi
+	fi
+	
+	maybe_exec 'before_install_gpu_drivers'
+	
+	einfo "Installing GPU drivers: $GPU_DRIVER"
+	
+	# Check if DE requires Wayland but GPU driver doesn't support it
+	if [[ "$(is_wayland_de "$DESKTOP_ENVIRONMENT")" == "true" && "$(gpu_driver_supports_wayland "$GPU_DRIVER")" == "false" ]]; then
+		ewarn "Warning: $DESKTOP_ENVIRONMENT is a Wayland DE, but $GPU_DRIVER doesn't support Wayland well"
+		ewarn "You may experience issues or fallback to X11"
+		if ! ask "Continue with $GPU_DRIVER installation?"; then
+			return 1
+		fi
+	fi
+	
+	# Install GPU driver packages
+	local gpu_packages="${GPU_DRIVER_PACKAGES[$GPU_DRIVER]}"
+	if [[ -n "$gpu_packages" ]]; then
+		einfo "Installing $GPU_DRIVER packages: $gpu_packages"
+		try emerge --verbose $gpu_packages
+	else
+		ewarn "No package definition found for GPU driver: $GPU_DRIVER"
+		return 1
+	fi
+	
+	# Install additional GPU driver packages
+	if [[ ${#GPU_DRIVER_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+		einfo "Installing additional GPU driver packages: ${GPU_DRIVER_ADDITIONAL_PACKAGES[*]}"
+		try emerge --verbose "${GPU_DRIVER_ADDITIONAL_PACKAGES[@]}"
+	fi
+	
+	# Install Vulkan support if enabled
+	if [[ "$ENABLE_VULKAN" == "true" ]]; then
+		einfo "Installing Vulkan support for $GPU_DRIVER"
+		case "$GPU_DRIVER" in
+			amd|mesa)
+				try emerge --verbose media-libs/mesa-vulkan-drivers
+				;;
+			nvidia|nvidia-nvk)
+				try emerge --verbose media-libs/mesa-vulkan-drivers
+				;;
+			intel)
+				try emerge --verbose media-libs/mesa-vulkan-drivers
+				;;
+		esac
+	fi
+	
+	# Install OpenCL support if enabled
+	if [[ "$ENABLE_OPENCL" == "true" ]]; then
+		einfo "Installing OpenCL support for $GPU_DRIVER"
+		case "$GPU_DRIVER" in
+			amd|mesa)
+				try emerge --verbose media-libs/mesa-opencl
+				;;
+			nvidia|nvidia-nvk)
+				try emerge --verbose media-libs/opencl-icd-loader
+				;;
+			intel)
+				try emerge --verbose media-libs/mesa-opencl
+				;;
+		esac
+	fi
+	
+	maybe_exec 'after_install_gpu_drivers'
+}
+
+function configure_gpu_drivers() {
+	[[ -z "$GPU_DRIVER" ]] && return 0
+	
+	maybe_exec 'before_configure_gpu_drivers'
+	
+	einfo "Configuring GPU drivers: $GPU_DRIVER"
+	
+	# Configure USE flags for GPU drivers
+	local use_flags="${GPU_DRIVER_USE_FLAGS[$GPU_DRIVER]}"
+	if [[ -n "$use_flags" ]]; then
+		einfo "Setting USE flags for $GPU_DRIVER: $use_flags"
+		echo "USE=\"\${USE} $use_flags\"" >> /etc/portage/make.conf
+	fi
+	
+	# Configure kernel modules for GPU drivers
+	local kernel_modules="${GPU_DRIVER_KERNEL_MODULES[$GPU_DRIVER]}"
+	if [[ -n "$kernel_modules" ]]; then
+		einfo "Configuring kernel modules for $GPU_DRIVER: $kernel_modules"
+		echo "MODULES_LOAD=\"\${MODULES_LOAD} $kernel_modules\"" >> /etc/conf.d/modules
+	fi
+	
+	# NVIDIA-specific configuration
+	if [[ "$GPU_DRIVER" == "nvidia" || "$GPU_DRIVER" == "nvidia-nvk" ]]; then
+		einfo "Configuring NVIDIA drivers"
+		
+		# Create NVIDIA configuration directory
+		mkdir_or_die 0755 "/etc/modprobe.d"
+		
+		# Configure NVIDIA kernel module options
+		cat > /etc/modprobe.d/nvidia.conf <<EOF
+# NVIDIA driver configuration
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+options nvidia NVreg_UsePageAttributeTable=1
+EOF
+		
+		# Enable NVIDIA persistence daemon
+		if [[ $SYSTEMD == "true" ]]; then
+			enable_service nvidia-persistenced
+		else
+			# For OpenRC, add to default runlevel
+			rc-update add nvidia-persistenced default
+		fi
+	fi
+	
+	# AMD-specific configuration
+	if [[ "$GPU_DRIVER" == "amd" || "$GPU_DRIVER" == "mesa" ]]; then
+		einfo "Configuring AMD drivers"
+		
+		# Create AMD configuration directory
+		mkdir_or_die 0755 "/etc/modprobe.d"
+		
+		# Configure AMD kernel module options
+		cat > /etc/modprobe.d/amdgpu.conf <<EOF
+# AMD GPU driver configuration
+options amdgpu gpu_recovery=1
+options amdgpu ppfeaturemask=0xffffffff
+EOF
+	fi
+	
+	# Intel-specific configuration
+	if [[ "$GPU_DRIVER" == "intel" || "$GPU_DRIVER" == "mesa" ]]; then
+		einfo "Configuring Intel drivers"
+		
+		# Create Intel configuration directory
+		mkdir_or_die 0755 "/etc/modprobe.d"
+		
+		# Configure Intel kernel module options
+		cat > /etc/modprobe.d/i915.conf <<EOF
+# Intel GPU driver configuration
+options i915 enable_guc=2
+options i915 enable_fbc=1
+EOF
+	fi
+	
+	maybe_exec 'after_configure_gpu_drivers'
 }
 
 function main_install() {
