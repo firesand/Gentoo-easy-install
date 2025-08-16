@@ -436,6 +436,9 @@ EOF
 	fi
 	maybe_exec 'after_configure_portage'
 
+	# Apply configured package management settings
+	apply_configured_package_management
+
 	einfo "Generating ssh host keys"
 	try ssh-keygen -A
 
@@ -1071,4 +1074,75 @@ function install_ntp_with_fallback() {
 	
 	ewarn "Failed to install any NTP implementation"
 	return 1
+}
+
+function apply_configured_package_management() {
+	einfo "Applying configured package management settings"
+	
+	# Apply package USE rules
+	if [[ ${#PACKAGE_USE_RULES[@]} -gt 0 ]]; then
+		einfo "Applying ${#PACKAGE_USE_RULES[@]} package USE rules"
+		for rule in "${PACKAGE_USE_RULES[@]}"; do
+			if [[ -n "$rule" ]]; then
+				einfo "Applying USE rule: $rule"
+				echo "$rule" >> /etc/portage/package.use/zz-autounmask
+			fi
+		done
+	fi
+	
+	# Apply package keywords
+	if [[ ${#PACKAGE_KEYWORDS[@]} -gt 0 ]]; then
+		einfo "Applying ${#PACKAGE_KEYWORDS[@]} package keywords"
+		for keyword_rule in "${PACKAGE_KEYWORDS[@]}"; do
+			if [[ -n "$keyword_rule" ]]; then
+				einfo "Applying package keyword: $keyword_rule"
+				echo "$keyword_rule" >> /etc/portage/package.keywords/zz-autounmask
+			fi
+		done
+	fi
+	
+	# Apply global ACCEPT_KEYWORDS
+	if [[ ${#ACCEPT_KEYWORDS[@]} -gt 0 ]]; then
+		einfo "Applying ${#ACCEPT_KEYWORDS[@]} global ACCEPT_KEYWORDS"
+		local keywords_string=""
+		for keyword in "${ACCEPT_KEYWORDS[@]}"; do
+			if [[ -n "$keyword" ]]; then
+				[[ -n "$keywords_string" ]] && keywords_string+=" "
+				keywords_string+="$keyword"
+			fi
+		done
+		
+		if [[ -n "$keywords_string" ]]; then
+			einfo "Setting ACCEPT_KEYWORDS: $keywords_string"
+			echo "ACCEPT_KEYWORDS=\"$keywords_string\"" >> /etc/portage/make.conf
+		fi
+	fi
+	
+	# Apply overlays
+	if [[ ${#OVERLAY_URLS[@]} -gt 0 ]]; then
+		einfo "Setting up ${#OVERLAY_URLS[@]} portage overlays"
+		
+		# Install layman if not already installed
+		if ! command -v layman >/dev/null 2>&1; then
+			einfo "Installing layman for overlay management"
+			try emerge --verbose app-portage/layman
+		fi
+		
+		# Add overlays
+		for i in "${!OVERLAY_URLS[@]}"; do
+			local overlay_url="${OVERLAY_URLS[$i]}"
+			local overlay_name="${OVERLAY_NAMES[$i]}"
+			
+			if [[ -n "$overlay_url" && -n "$overlay_name" ]]; then
+				einfo "Adding overlay: $overlay_name ($overlay_url)"
+				try layman -a "$overlay_name" -f -o "$overlay_url"
+			fi
+		done
+		
+		# Sync overlays
+		einfo "Syncing overlays"
+		try layman -s ALL
+	fi
+	
+	einfo "Package management configuration applied successfully"
 }
