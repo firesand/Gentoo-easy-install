@@ -368,52 +368,112 @@ function generate_fstab() {
 	fi
 }
 
+function main_install() {
+	[[ $# == 0 ]] || die "Too many arguments"
+
+	einfo "Starting Gentoo installation following Handbook sequence"
+	
+	# Step 1: Prepare installation environment (network already configured)
+	einfo "Step 1: Preparing installation environment"
+	prepare_installation_environment
+	
+	# Step 2: Prepare disks (partitioning and mounting)
+	einfo "Step 2: Preparing disks"
+	apply_disk_configuration
+	
+	# Step 3: Download and extract Stage 3
+	einfo "Step 3: Installing Gentoo installation files (Stage 3)"
+	download_stage3
+	extract_stage3
+	
+	# Step 4: Chroot into the new system
+	einfo "Step 4: Chrooting into new system"
+	[[ $IS_EFI == "true" ]] && mount_efivars
+	gentoo_chroot "$ROOT_MOUNTPOINT" "$GENTOO_INSTALL_REPO_BIND/install" __install_gentoo_in_chroot
+}
+
 function main_install_gentoo_in_chroot() {
 	[[ $# == 0 ]] || die "Too many arguments"
 
+	einfo "Continuing installation inside chroot environment"
+	
 	maybe_exec 'before_install'
 
-	# Remove the root password, making the account accessible for automated
-	# tasks during the period of installation.
-	einfo "Clearing root password"
-	passwd -d root \
-		|| die "Could not change root password"
+	# Step 5: Install Gentoo base system
+	einfo "Step 5: Installing Gentoo base system"
+	install_base_system
+	
+	# Step 6: Configure the Linux kernel
+	einfo "Step 6: Configuring the Linux kernel"
+	configure_kernel
+	
+	# Step 7: Configure the system
+	einfo "Step 7: Configuring the system"
+	configure_system
+	
+	# Step 8: Install system tools
+	einfo "Step 8: Installing system tools"
+	install_system_tools
+	
+	# Step 9: Configure the bootloader
+	einfo "Step 9: Configuring the bootloader"
+	configure_bootloader
+	
+	# Step 10: Finalize the installation
+	einfo "Step 10: Finalizing the installation"
+	finalize_installation
+	
+	maybe_exec 'after_install'
+}
 
-	# Sync portage
+function install_base_system() {
+	einfo "Installing base system components"
+	
+	# Remove the root password for automated tasks during installation
+	einfo "Clearing root password"
+	passwd -d root || die "Could not change root password"
+
+	# Sync portage tree
 	einfo "Syncing portage tree"
 	try emerge-webrsync
 
-	# Install mdadm if we used RAID (needed for UUID resolving)
+	# Install mdadm if we used RAID
 	if [[ $USED_RAID == "true" ]]; then
-		einfo "Installing mdadm"
+		einfo "Installing mdadm for RAID support"
 		try emerge --verbose sys-fs/mdadm
 	fi
 
+	# Mount boot partitions
 	if [[ $IS_EFI == "true" ]]; then
-		# Mount efi partition
+		einfo "Mounting EFI partition"
 		mount_efivars
-		einfo "Mounting efi partition"
 		mount_by_id "$DISK_ID_EFI" "/boot/efi"
 	else
-		# Mount bios partition
-		einfo "Mounting bios partition"
+		einfo "Mounting BIOS partition"
 		mount_by_id "$DISK_ID_BIOS" "/boot/bios"
 	fi
 
-	# Configure basic system things like timezone, locale, ...
+	# Configure basic system (timezone, locale, etc.)
 	maybe_exec 'before_configure_base_system'
 	configure_base_system
 	maybe_exec 'after_configure_base_system'
 
-	# Prepare portage environment
+	# Configure portage environment
 	maybe_exec 'before_configure_portage'
 	configure_portage
+	maybe_exec 'after_configure_portage'
+}
 
-	# Install git (for git portage overlays)
-	einfo "Installing git"
+function configure_kernel() {
+	einfo "Configuring Linux kernel"
+	
+	# Install git for portage overlays
+	einfo "Installing git for portage overlays"
 	try emerge --verbose dev-vcs/git
 
+	# Configure git-based portage if requested
 	if [[ "$PORTAGE_SYNC_TYPE" == "git" ]]; then
+		einfo "Configuring git-based portage"
 		mkdir_or_die 0755 "/etc/portage/repos.conf"
 		cat > /etc/portage/repos.conf/gentoo.conf <<EOF
 [DEFAULT]
@@ -434,164 +494,183 @@ EOF
 			|| die "Could not delete obsolete rsync gentoo repository"
 		try emerge --sync
 	fi
-	maybe_exec 'after_configure_portage'
 
-	# Apply configured package management settings
-	apply_configured_package_management
-
-	einfo "Generating ssh host keys"
+	# Generate SSH host keys
+	einfo "Generating SSH host keys"
 	try ssh-keygen -A
 
-	# Install authorized_keys before dracut, which might need them for remote unlocking.
+	# Install authorized keys
 	install_authorized_keys
 
-	einfo "Enabling dracut USE flag on sys-kernel/installkernel"
+	# Configure kernel installation
+	einfo "Configuring kernel installation"
 	echo "sys-kernel/installkernel dracut" > /etc/portage/package.use/installkernel \
 		|| die "Could not write /etc/portage/package.use/installkernel"
 
-	# Install required programs and kernel now, in order to
-	# prevent emerging module before an imminent kernel upgrade
+	# Install kernel and dracut
+	einfo "Installing kernel and dracut"
 	try emerge --verbose sys-kernel/dracut sys-kernel/gentoo-kernel-bin app-arch/zstd
 
-	# Install cryptsetup if we used LUKS
+	# Install cryptsetup if LUKS is used
 	if [[ $USED_LUKS == "true" ]]; then
-		einfo "Installing cryptsetup"
+		einfo "Installing cryptsetup for LUKS support"
 		try emerge --verbose sys-fs/cryptsetup
 	fi
 
+	# Rebuild systemd with cryptsetup if needed
 	if [[ $SYSTEMD == "true" && $USED_LUKS == "true" ]] ; then
-		einfo "Enabling cryptsetup USE flag on sys-apps/systemd"
+		einfo "Enabling cryptsetup USE flag on systemd"
 		echo "sys-apps/systemd cryptsetup" > /etc/portage/package.use/systemd \
 			|| die "Could not write /etc/portage/package.use/systemd"
 		einfo "Rebuilding systemd with changed USE flag"
 		try emerge --verbose --changed-use --oneshot sys-apps/systemd
 	fi
+}
 
-	# Install btrfs-progs if we used Btrfs
-	if [[ $USED_BTRFS == "true" ]]; then
-		einfo "Installing btrfs-progs"
-		try emerge --verbose sys-fs/btrfs-progs
-	fi
-
-	try emerge --verbose dev-vcs/git
-
-	# Install ZFS kernel module and tools if we used ZFS
-	if [[ $USED_ZFS == "true" ]]; then
-		einfo "Installing zfs"
-		try emerge --verbose sys-fs/zfs sys-fs/zfs-kmod
-
-		einfo "Enabling zfs services"
-		if [[ $SYSTEMD == "true" ]]; then
-			try systemctl enable zfs.target
-			try systemctl enable zfs-import-cache
-			try systemctl enable zfs-mount
-			try systemctl enable zfs-import.target
-		else
-			try rc-update add zfs-import boot
-			try rc-update add zfs-mount boot
-		fi
-	fi
-
-	# Install kernel and initramfs
-	maybe_exec 'before_install_kernel'
-	install_kernel
-	maybe_exec 'after_install_kernel'
-
-	# Generate a valid fstab file
-	generate_fstab
-
-	# Install gentoolkit
-	einfo "Installing gentoolkit"
-	try emerge --verbose app-portage/gentoolkit
-
+function configure_system() {
+	einfo "Configuring system settings"
+	
+	# Apply configured package management settings
+	apply_configured_package_management
+	
+	# Configure systemd or OpenRC
 	if [[ $SYSTEMD == "true" ]]; then
-		if [[ $SYSTEMD_NETWORKD == "true" ]]; then
-			# Enable systemd networking and dhcp
-			enable_service systemd-networkd
-			enable_service systemd-resolved
-			if [[ $SYSTEMD_NETWORKD_DHCP == "true" ]]; then
-				echo -en "[Match]\nName=${SYSTEMD_NETWORKD_INTERFACE_NAME}\n\n[Network]\nDHCP=yes" > /etc/systemd/network/20-wired.network \
-					|| die "Could not write dhcp network config to '/etc/systemd/network/20-wired.network'"
-			else
-				addresses=""
-				for addr in "${SYSTEMD_NETWORKD_ADDRESSES[@]}"; do
-					addresses="${addresses}Address=$addr\n"
-				done
-				echo -en "[Match]\nName=${SYSTEMD_NETWORKD_INTERFACE_NAME}\n\n[Network]\n${addresses}Gateway=$SYSTEMD_NETWORKD_GATEWAY" > /etc/systemd/network/20-wired.network \
-					|| die "Could not write dhcp network config to '/etc/systemd/network/20-wired.network'"
-			fi
-			chown root:systemd-network /etc/systemd/network/20-wired.network \
-				|| die "Could not change owner of '/etc/systemd/network/20-wired.network'"
-			chmod 640 /etc/systemd/network/20-wired.network \
-				|| die "Could not change permissions of '/etc/systemd/network/20-wired.network'"
-		fi
+		einfo "Configuring systemd"
+		configure_systemd
 	else
-		# Install and enable dhcpcd
-		einfo "Installing dhcpcd"
-		try emerge --verbose net-misc/dhcpcd
-
-		enable_service dhcpcd
+		einfo "Configuring OpenRC"
+		configure_openrc
 	fi
+}
 
+function install_system_tools() {
+	einfo "Installing system tools"
+	
+	# Install performance optimization tools if enabled
+	if [[ "$ENABLE_PERFORMANCE_OPTIMIZATION" == "true" ]]; then
+		einfo "Installing performance optimization tools"
+		install_performance_optimization
+	fi
+	
+	# Install VM testing tools if enabled
+	if [[ "$ENABLE_VM_TESTING_TOOLS" == "true" ]]; then
+		einfo "Installing VM testing tools"
+		install_vm_testing_tools
+	fi
+	
+	# Install additional packages specified by user
+	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+		einfo "Installing additional packages: ${ADDITIONAL_PACKAGES[*]}"
+		try emerge --verbose "${ADDITIONAL_PACKAGES[@]}"
+	fi
+}
+
+function configure_bootloader() {
+	einfo "Configuring bootloader"
+	
+	# Install and configure GRUB
+	einfo "Installing and configuring GRUB"
+	try emerge --verbose sys-boot/grub
+	
+	if [[ $IS_EFI == "true" ]]; then
+		einfo "Installing EFI bootloader"
+		try emerge --verbose sys-boot/grub:2
+		grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=gentoo
+	else
+		einfo "Installing BIOS bootloader"
+		grub-install "$DISK_DEVICE"
+	fi
+	
+	# Generate GRUB configuration
+	einfo "Generating GRUB configuration"
+	grub-mkconfig -o /boot/grub/grub.cfg
+}
+
+function finalize_installation() {
+	einfo "Finalizing installation"
+	
+	# Set root password
+	einfo "Setting root password"
+	passwd root || ewarn "Could not set root password - user will need to set it manually"
+	
+	# Clean up temporary files
+	einfo "Cleaning up temporary files"
+	emerge --depclean
+	
+	# Update system
+	einfo "Updating system"
+	emerge --update --deep --newuse @world
+	
+	einfo "Gentoo installation completed successfully!"
+	einfo "You can now reboot into your new system"
+}
+
+function configure_systemd() {
+	einfo "Configuring systemd services"
+	
+	# Enable essential systemd services
+	enable_service systemd-networkd
+	enable_service systemd-resolved
+	
+	# Configure network if specified
+	if [[ $SYSTEMD_NETWORKD == "true" ]]; then
+		if [[ $SYSTEMD_NETWORKD_DHCP == "true" ]]; then
+			echo -en "[Match]\nName=${SYSTEMD_NETWORKD_INTERFACE_NAME}\n\n[Network]\nDHCP=yes" > /etc/systemd/network/20-wired.network \
+				|| die "Could not write dhcp network config to '/etc/systemd/network/20-wired.network'"
+		else
+			addresses=""
+			for addr in "${SYSTEMD_NETWORKD_ADDRESSES[@]}"; do
+				addresses="${addresses}Address=$addr\n"
+			done
+			echo -en "[Match]\nName=${SYSTEMD_NETWORKD_INTERFACE_NAME}\n\n[Network]\n${addresses}Gateway=$SYSTEMD_NETWORKD_GATEWAY" > /etc/systemd/network/20-wired.network \
+				|| die "Could not write dhcp network config to '/etc/systemd/network/20-wired.network'"
+		fi
+		chown root:systemd-network /etc/systemd/network/20-wired.network \
+			|| die "Could not change owner of '/etc/systemd/network/20-wired.network'"
+		chmod 640 /etc/systemd/network/20-wired.network \
+			|| die "Could not change permissions of '/etc/systemd/network/20-wired.network'"
+	fi
+}
+
+function configure_openrc() {
+	einfo "Configuring OpenRC services"
+	
+	# Install and enable dhcpcd
+	einfo "Installing dhcpcd"
+	try emerge --verbose net-misc/dhcpcd
+	enable_service dhcpcd
+	
+	# Enable SSH if requested
 	if [[ $ENABLE_SSHD == "true" ]]; then
 		enable_sshd
 	fi
+}
 
-	# Install desktop environment if specified
-	install_desktop_environment
-
-	# Configure desktop environment services
-	configure_desktop_services
-
-	# Install GPU drivers if specified
-	install_gpu_drivers
-
-	# Configure GPU drivers
-	configure_gpu_drivers
-
-	# Install performance optimization tools if enabled
-	install_performance_optimization
-
-	# Install VM testing tools if enabled
-	install_vm_testing_tools
-
-	# Install display backend testing tools if enabled
-	install_display_backend_testing
-
-	# Install GPU benchmarking tools if enabled
-	install_gpu_benchmarking
-
-	# Install additional packages, if any.
-	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
-		einfo "Installing additional packages"
-		# shellcheck disable=SC2086
-		try emerge --verbose --autounmask-continue=y -- "${ADDITIONAL_PACKAGES[@]}"
-	fi
-
-	if ask "Do you want to assign a root password now?"; then
-		try passwd root
-		einfo "Root password assigned"
+function enable_service() {
+	local service="$1"
+	einfo "Enabling service: $service"
+	
+	if [[ $SYSTEMD == "true" ]]; then
+		try systemctl enable "$service"
 	else
-		try passwd -d root
-		ewarn "Root password cleared, set one as soon as possible!"
+		try rc-update add "$service" default
 	fi
+}
 
-	# If configured, change to gentoo testing at the last moment.
-	# This is to ensure a smooth installation process. You can deal
-	# with the blockers after installation ;)
-	if [[ $USE_PORTAGE_TESTING == "true" ]]; then
-		einfo "Adding ~$GENTOO_ARCH to ACCEPT_KEYWORDS"
-		echo "ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"" >> /etc/portage/make.conf \
-			|| die "Could not modify /etc/portage/make.conf"
+function enable_sshd() {
+	einfo "Enabling SSH daemon"
+	
+	if [[ $SYSTEMD == "true" ]]; then
+		try systemctl enable sshd
+	else
+		try rc-update add sshd default
 	fi
+}
 
-	maybe_exec 'after_install'
-
-	einfo "Gentoo installation complete."
-	[[ $USED_LUKS == "true" ]] \
-		&& einfo "A backup of your luks headers can be found at '$LUKS_HEADER_BACKUP_DIR', in case you want to have a backup."
-	einfo "You may now reboot your system or execute ./install --chroot $ROOT_MOUNTPOINT to enter your system in a chroot."
-	einfo "Chrooting in this way is always possible in case you need to fix something after rebooting."
+# Legacy functions for backward compatibility
+function install_stage3() {
+	ewarn "install_stage3() is deprecated - use main_install() instead"
+	main_install
 }
 
 function install_desktop_environment() {
@@ -850,17 +929,6 @@ EOF
 	fi
 	
 	maybe_exec 'after_configure_gpu_drivers'
-}
-
-function main_install() {
-	[[ $# == 0 ]] || die "Too many arguments"
-
-	gentoo_umount
-	install_stage3
-
-	[[ $IS_EFI == "true" ]] \
-		&& mount_efivars
-	gentoo_chroot "$ROOT_MOUNTPOINT" "$GENTOO_INSTALL_REPO_BIND/install" __install_gentoo_in_chroot
 }
 
 function main_chroot() {
