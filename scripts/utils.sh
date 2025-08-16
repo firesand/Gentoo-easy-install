@@ -446,7 +446,16 @@ function check_wanted_programs() {
 			for program in "${missing_required[@]}" "${missing_wanted[@]}"; do
 				if [[ "$program" == "ntpd" ]]; then
 					elog "Installing ntpd using emerge..."
-					emerge --ask ntp || die "Failed to install ntpd."
+					# Use enhanced NTP installation with fallback support
+					if type install_ntp_with_fallback &>/dev/null; then
+						install_ntp_with_fallback || die "Failed to install any NTP implementation."
+					else
+						# Fallback to direct installation if function not available
+						if ! emerge --ask ntp; then
+							elog "NTP installation failed, trying openntpd..."
+							emerge --ask openntpd || die "Failed to install any NTP implementation."
+						fi
+					fi
 				else
 					elog "You need to manually install $program."
 				fi
