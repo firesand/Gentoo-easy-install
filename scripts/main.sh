@@ -509,7 +509,53 @@ EOF
 
 	# Install kernel and dracut
 	einfo "Installing kernel and dracut"
-	try emerge --verbose sys-kernel/dracut sys-kernel/gentoo-kernel-bin app-arch/zstd
+	try emerge --verbose sys-kernel/dracut app-arch/zstd
+	
+	# Try to install binary kernel first, fallback to source if needed
+	if ! emerge --verbose sys-kernel/gentoo-kernel-bin; then
+		ewarn "Binary kernel installation failed, trying source kernel"
+		try emerge --verbose sys-kernel/gentoo-sources
+		try emerge --verbose sys-kernel/genkernel
+		
+		# Configure and compile kernel
+		einfo "Configuring and compiling kernel"
+		cd /usr/src/linux
+		try make defconfig
+		try make -j$(nproc)
+		try make modules_install
+		try make install
+		cd /
+	fi
+	
+	# Configure dracut to create initramfs
+	einfo "Configuring dracut"
+	mkdir_or_die 0755 "/etc/dracut.conf.d"
+	cat > /etc/dracut.conf.d/gentoo.conf <<EOF
+# Gentoo dracut configuration
+add_drivers+="virtio virtio_pci virtio_net virtio_blk"
+hostonly=yes
+use_fstab=yes
+EOF
+	
+	# Generate initramfs for the installed kernel
+	einfo "Generating initramfs"
+	local kernel_version
+	if [[ -d /usr/src/linux ]]; then
+		# Source kernel
+		kernel_version="$(ls /usr/src/linux-* | head -n1 | sed 's|/usr/src/linux-||')"
+	else
+		# Binary kernel
+		kernel_version="$(ls /boot/vmlinuz-* | head -n1 | sed 's|/boot/vmlinuz-||')"
+	fi
+	
+	if [[ -n "$kernel_version" ]]; then
+		einfo "Generating initramfs for kernel: $kernel_version"
+		try dracut --force --kver "$kernel_version"
+	else
+		ewarn "Could not determine kernel version for initramfs"
+		ls -la /usr/src/ || true
+		ls -la /boot/ || true
+	fi
 
 	# Install cryptsetup if LUKS is used
 	if [[ $USED_LUKS == "true" ]]; then
@@ -584,6 +630,19 @@ function configure_bootloader() {
 	# Generate GRUB configuration
 	einfo "Generating GRUB configuration"
 	grub-mkconfig -o /boot/grub/grub.cfg
+	
+	# Verify kernel files exist
+	einfo "Verifying kernel installation"
+	if [[ ! -f /boot/vmlinuz-* ]]; then
+		ewarn "No kernel image found in /boot"
+		ls -la /boot/ || true
+		ls -la /usr/src/ || true
+	fi
+	
+	if [[ ! -f /boot/initramfs-* ]]; then
+		ewarn "No initramfs found in /boot"
+		ls -la /boot/ || true
+	fi
 }
 
 function finalize_installation() {
