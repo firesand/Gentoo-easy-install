@@ -1046,6 +1046,11 @@ function install_performance_optimization() {
 	
 	# Install system monitoring tools
 	try emerge --verbose sys-process/btop
+    try emerge --verbose net-misc/openssh 
+	try emerge --verbose app-eselect/eselect-repository
+	try emerge --verbose net-misc/dhcpcd
+	try emerge --verbose app-text/evince
+	try emerge --verbose net-wireless/iw
 	
 	# Configure performance settings
 	einfo "Configuring performance optimization"
