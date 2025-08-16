@@ -527,50 +527,49 @@ EOF
 		cd /
 	fi
 	
-	# Configure dracut to create initramfs
-	einfo "Configuring dracut"
-	mkdir_or_die 0755 "/etc/dracut.conf.d"
-	cat > /etc/dracut.conf.d/gentoo.conf <<EOF
-# Gentoo dracut configuration
-add_drivers+=" virtio virtio_pci virtio_net virtio_blk "
-hostonly=yes
-use_fstab=yes
-EOF
+	# Generate initramfs using the proven dracut approach
+	einfo "Generating initramfs with dracut"
 	
-	# Generate initramfs for the installed kernel
-	einfo "Generating initramfs"
-	local kernel_version
+	# Determine required modules based on system configuration
+	local modules=()
+	[[ $USED_RAID == "true" ]] && modules+=("mdraid")
+	[[ $USED_LUKS == "true" ]] && modules+=("crypt crypt-gpg")
+	[[ $USED_BTRFS == "true" ]] && modules+=("btrfs")
+	[[ $USED_ZFS == "true" ]] && modules+=("zfs")
 	
-	# Try to find kernel version from multiple sources
-	if [[ -d /usr/src/linux ]]; then
-		# Source kernel - look for actual kernel directories, not Documentation
-		kernel_version="$(ls /usr/src/ | grep '^linux-[0-9]' | head -n1 | sed 's|linux-||')"
-	elif [[ -f /boot/vmlinuz ]]; then
-		# Single kernel file
-		kernel_version="$(readlink /boot/vmlinuz | sed 's|.*vmlinuz-||' || echo '')"
-	elif [[ -f /boot/vmlinuz-* ]]; then
-		# Multiple kernel files
-		kernel_version="$(ls /boot/vmlinuz-* | head -n1 | sed 's|/boot/vmlinuz-||')"
+	# Add virtio modules for VM compatibility
+	modules+=("virtio virtio_pci virtio_net virtio_blk")
+	
+	# Get kernel version from symlink (proven method)
+	local kver
+	kver="$(readlink /usr/src/linux)" || die "Could not figure out kernel version from /usr/src/linux symlink."
+	kver="${kver#linux-}"
+	
+	# Configure dracut options
+	local dracut_opts=()
+	if [[ $SYSTEMD == "true" && $SYSTEMD_INITRAMFS_SSHD == "true" ]]; then
+		cd /tmp || die "Could not change into /tmp"
+		try git clone https://github.com/gsauthof/dracut-sshd
+		try cp -r dracut-sshd/46sshd /usr/lib/dracut/modules.d
+		sed -e 's/^Type=notify/Type=simple/' \
+			-e 's@^\(ExecStart=/usr/sbin/sshd\) -D@\1 -e -D@' \
+			-i /usr/lib/dracut/modules.d/46sshd/sshd.service \
+			|| die "Could not replace sshd options in service file"
+		
+		dracut_opts+=("--install" "/etc/systemd/network/20-wired.network")
+		modules+=("systemd-networkd")
 	fi
 	
-	# Additional fallback: check /proc/version
-	if [[ -z "$kernel_version" ]]; then
-		kernel_version="$(cat /proc/version 2>/dev/null | sed 's|.*Linux version \([^ ]*\).*|\1|' || echo '')"
-	fi
-	
-	if [[ -n "$kernel_version" && "$kernel_version" != "Documentation" ]]; then
-		einfo "Generating initramfs for kernel: $kernel_version"
-		try dracut --force --kver "$kernel_version"
-	else
-		ewarn "Could not determine valid kernel version for initramfs"
-		ewarn "Available kernel sources:"
-		ls -la /usr/src/ 2>/dev/null || true
-		ewarn "Available kernel images:"
-		ls -la /boot/vmlinuz* 2>/dev/null || true
-		ewarn "System kernel version:"
-		cat /proc/version 2>/dev/null || true
-		die "Cannot proceed without valid kernel version"
-	fi
+	# Generate initramfs using proven dracut command
+	try dracut \
+		--kver "$kver" \
+		--zstd \
+		--no-hostonly \
+		--ro-mnt \
+		--add "bash ${modules[*]}" \
+		"${dracut_opts[@]}" \
+		--force \
+		/boot/initramfs-"$kver".img
 
 	# Install cryptsetup if LUKS is used
 	if [[ $USED_LUKS == "true" ]]; then
