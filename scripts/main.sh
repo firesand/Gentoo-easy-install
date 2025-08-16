@@ -1073,76 +1073,9 @@ function install_gpu_benchmarking() {
 	maybe_exec 'after_install_gpu_benchmarking'
 }
 
-function resolve_circular_dependencies() {
-	local package="$1"
-	local max_attempts=3
-	local attempt=1
-	
-	while [[ $attempt -le $max_attempts ]]; do
-		einfo "Attempting to install $package (attempt $attempt/$max_attempts)"
-		
-		if emerge --verbose "$package"; then
-			einfo "Successfully installed $package"
-			return 0
-		fi
-		
-		# Check for circular dependency errors
-		if grep -q "circular dependencies" /tmp/emerge_error.log 2>/dev/null; then
-			ewarn "Circular dependency detected, attempting to resolve..."
-			
-			# Try common USE flag changes to break cycles
-			if [[ "$package" == *"ntp"* ]]; then
-				einfo "Applying NTP-specific dependency fixes..."
-				echo "sys-devel/m4 -nls" >> /etc/portage/package.use/m4 2>/dev/null || true
-				echo "sys-devel/gettext -nls" >> /etc/portage/package.use/gettext 2>/dev/null || true
-			fi
-			
-			# Try alternative package if available
-			case "$package" in
-				"net-misc/ntp")
-					einfo "Trying alternative NTP implementation..."
-					if emerge --verbose net-misc/openntpd; then
-						einfo "Successfully installed openntpd as alternative"
-						return 0
-					fi
-					;;
-			esac
-		fi
-		
-		((attempt++))
-		sleep 2
-	done
-	
-	ewarn "Failed to install $package after $max_attempts attempts"
-	return 1
-}
 
-function install_ntp_with_fallback() {
-	einfo "Installing NTP time synchronization"
-	
-	# Try to install ntp first
-	if resolve_circular_dependencies "net-misc/ntp"; then
-		einfo "NTP installed successfully"
-		return 0
-	fi
-	
-	# Fallback to openntpd
-	einfo "Falling back to openntpd"
-	if resolve_circular_dependencies "net-misc/openntpd"; then
-		einfo "OpenNTPD installed successfully as fallback"
-		return 0
-	fi
-	
-	# Final fallback to chrony
-	einfo "Falling back to chrony"
-	if resolve_circular_dependencies "net-misc/chrony"; then
-		einfo "Chrony installed successfully as final fallback"
-		return 0
-	fi
-	
-	ewarn "Failed to install any NTP implementation"
-	return 1
-}
+
+
 
 function apply_configured_package_management() {
 	einfo "Applying configured package management settings"

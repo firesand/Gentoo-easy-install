@@ -7,13 +7,17 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/protection.sh" || exit 1
 
 function sync_time() {
 	einfo "Syncing time"
+	
+	# Try to sync time using available methods, but don't require NTP
 	if command -v ntpd &> /dev/null; then
+		einfo "Using ntpd to sync time"
 		try ntpd -g -q
 	elif command -v chrony &> /dev/null; then
-		# See https://github.com/oddlama/gentoo-install/pull/122
+		einfo "Using chrony to sync time"
 		try chronyd -q
 	else
-		# why am I doing this?
+		# Simple fallback: use HTTP header to get current time
+		einfo "Using HTTP header fallback to sync time"
 		try date -s "$(curl -sI http://example.com | grep -i ^date: | cut -d' ' -f3-)"
 	fi
 
@@ -80,7 +84,6 @@ function prepare_installation_environment() {
 		gpg
 		hwclock
 		lsblk
-		ntpd
 		partprobe
 		python3
 		"?rhash"
@@ -102,7 +105,7 @@ function prepare_installation_environment() {
 	# Check for existence of required programs
 	check_wanted_programs "${wanted_programs[@]}"
 
-	# Sync time now to prevent issues later
+	# Sync time now to prevent issues later (optional, won't fail if NTP unavailable)
 	sync_time
 
 	maybe_exec 'after_prepare_environment'
