@@ -15,7 +15,7 @@ like [Ansible](https://github.com/ansible/ansible) or [Fora](https://github.com/
 [Recommendations](#recommendations) |
 [FAQ](#troubleshooting-and-faq)
 
-![](contrib/screenshot_configure.png)
+![](contrib/new_configure.png)
 
 This installer might appeal to you if
 
