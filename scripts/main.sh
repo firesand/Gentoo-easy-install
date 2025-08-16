@@ -467,6 +467,23 @@ function install_base_system() {
 function configure_kernel() {
 	einfo "Configuring Linux kernel"
 	
+	# Install filesystem tools BEFORE kernel/dracut installation
+	# These are required for dracut to properly handle filesystem modules
+	if [[ $USED_BTRFS == "true" ]]; then
+		einfo "Installing BTRFS tools for BTRFS support"
+		try emerge --verbose sys-fs/btrfs-progs
+	fi
+	
+	if [[ $USED_ZFS == "true" ]]; then
+		einfo "Installing ZFS tools for ZFS support"
+		try emerge --verbose sys-fs/zfs
+	fi
+	
+	if [[ $USED_RAID == "true" ]]; then
+		einfo "Installing RAID tools for RAID support"
+		try emerge --verbose sys-fs/mdadm
+	fi
+	
 	# Install git for portage overlays
 	einfo "Installing git for portage overlays"
 	try emerge --verbose dev-vcs/git
@@ -579,21 +596,7 @@ EOF
 		try emerge --verbose sys-fs/cryptsetup
 	fi
 	
-	# Install filesystem tools based on configuration
-	if [[ $USED_BTRFS == "true" ]]; then
-		einfo "Installing BTRFS tools for BTRFS support"
-		try emerge --verbose sys-fs/btrfs-progs
-	fi
-	
-	if [[ $USED_ZFS == "true" ]]; then
-		einfo "Installing ZFS tools for ZFS support"
-		try emerge --verbose sys-fs/zfs
-	fi
-	
-	if [[ $USED_RAID == "true" ]]; then
-		einfo "Installing RAID tools for RAID support"
-		try emerge --verbose sys-fs/mdadm
-	fi
+
 
 	# Rebuild systemd with cryptsetup if needed
 	if [[ $SYSTEMD == "true" && $USED_LUKS == "true" ]] ; then
