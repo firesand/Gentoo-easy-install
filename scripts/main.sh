@@ -414,7 +414,22 @@ function main_install_gentoo_in_chroot() {
 	# Step 8: Install system tools
 	einfo "Step 8: Installing system tools"
 	install_system_tools
-	
+
+    # NEW SECTION: Install Desktop Environment and GPU Drivers
+	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		einfo "Step 8a: Installing Desktop Environment"
+		install_desktop_environment
+		install_display_manager
+		install_network_manager
+		configure_desktop_services
+	fi
+	if [[ -n "$GPU_DRIVER" || -n "$DESKTOP_ENVIRONMENT" ]]; then
+		einfo "Step 8b: Installing GPU Drivers"
+		install_gpu_drivers
+		configure_gpu_drivers
+	fi
+	# END OF NEW SECTION
+ 
 	# Step 9: Configure the bootloader
 	einfo "Step 9: Configuring the bootloader"
 	configure_bootloader
