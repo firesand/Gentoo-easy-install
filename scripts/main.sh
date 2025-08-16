@@ -588,7 +588,7 @@ EOF
 		--add-drivers "virtio virtio_pci virtio_net virtio_blk" \
 		--force \
 		--verbose \
-		/boot/initramfs-"$kver".img
+		"/boot/initramfs-$kver.img"
 
 	# Install cryptsetup if LUKS is used
 	if [[ $USED_LUKS == "true" ]]; then
