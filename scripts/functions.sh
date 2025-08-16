@@ -1114,9 +1114,6 @@ function enable_network_manager() {
 		connman)
 			enable_service connman
 			;;
-		wicd)
-			enable_service wicd
-			;;
 		*)
 			ewarn "Unknown network manager: $nm"
 			return 1

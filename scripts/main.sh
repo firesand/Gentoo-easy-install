@@ -826,7 +826,7 @@ function install_gpu_drivers() {
 			amd|mesa)
 				try emerge --verbose media-libs/mesa-vulkan-drivers
 				;;
-			nvidia|nvidia-nvk)
+			nvidia)
 				try emerge --verbose media-libs/mesa-vulkan-drivers
 				;;
 			intel)
@@ -842,7 +842,7 @@ function install_gpu_drivers() {
 			amd|mesa)
 				try emerge --verbose media-libs/mesa-opencl
 				;;
-			nvidia|nvidia-nvk)
+			nvidia)
 				try emerge --verbose media-libs/opencl-icd-loader
 				;;
 			intel)
@@ -876,7 +876,7 @@ function configure_gpu_drivers() {
 	fi
 	
 	# NVIDIA-specific configuration
-	if [[ "$GPU_DRIVER" == "nvidia" || "$GPU_DRIVER" == "nvidia-nvk" ]]; then
+	if [[ "$GPU_DRIVER" == "nvidia" ]]; then
 		einfo "Configuring NVIDIA drivers"
 		
 		# Create NVIDIA configuration directory
@@ -953,10 +953,10 @@ function install_performance_optimization() {
 	# Install system monitoring tools
 	try emerge --verbose sys-process/htop
 	try emerge --verbose sys-process/iotop
+	try emerge --verbose sys-process/btop
 	
 	# Install performance tuning tools
-	try emerge --verbose sys-apps/tuned
-	try emerge --verbose sys-apps/tuned-utils
+	try ACCEPT_KEYWORDS="~amd64" emerge -av sys-apps/tuned
 	
 	# Configure performance settings
 	einfo "Configuring performance optimization"

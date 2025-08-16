@@ -1803,7 +1803,6 @@ function ENABLE_NETWORK_MANAGER_menu()  {
 		"auto" "Automatic (DE default)" \
 		"networkmanager" "NetworkManager (recommended)" \
 		"connman" "ConnMan (lightweight)" \
-		"wicd" "Wicd (minimal)" \
 		"none" "No network manager"
 	then
 		ENABLE_NETWORK_MANAGER="$dialog_out"
@@ -1828,7 +1827,6 @@ function GPU_DRIVER_menu()  {
 		"amd" "AMD GPU drivers (Mesa-based, recommended for AMD cards)" \
 		"intel" "Intel GPU drivers (Mesa-based, recommended for Intel cards)" \
 		"nvidia" "NVIDIA proprietary drivers (best performance, closed source)" \
-		"nvidia-nvk" "NVIDIA open-source drivers (NVK, experimental)" \
 		"nouveau" "NVIDIA open-source drivers (Nouveau, good compatibility)" \
 		"none" "No GPU drivers (server/CLI only)"
 	then

@@ -16,7 +16,7 @@ declare -A DE_PACKAGES=(
     [openbox]="gui-wm/openbox"
     [fluxbox]="gui-wm/fluxbox"
     [enlightenment]="gui-wm/enlightenment"
-    [pantheon]="x11-themes/elementary-xfce-icon-theme"
+    [pantheon]="pantheon-desktop"
 )
 
 # Display manager packages
@@ -32,7 +32,6 @@ declare -A DM_PACKAGES=(
 declare -A NM_PACKAGES=(
     [networkmanager]="net-misc/networkmanager"
     [connman]="net-misc/connman"
-    [wicd]="net-misc/wicd"
 )
 
 # Default display manager for each DE
@@ -86,7 +85,7 @@ declare -A DE_ADDITIONAL_PACKAGES=(
     [openbox]="gui-apps/tint2 gui-apps/obconf"
     [fluxbox]="gui-apps/fbsetbg"
     [enlightenment]="gui-apps/terminology"
-    [pantheon]=""
+    [pantheon]="pantheon-shell elementary-xfce-icon-theme elementary-xfce-theme"
 )
 
 # Function to get default display manager for a DE
@@ -123,7 +122,6 @@ function de_requires_systemd() {
 declare -A GPU_DRIVER_PACKAGES=(
 	[amd]="x11-drivers/xf86-video-amdgpu media-libs/mesa media-libs/mesa-vulkan-drivers"
 	[nvidia]="x11-drivers/nvidia-drivers media-libs/mesa-vulkan-drivers"
-	[nvidia-nvk]="x11-drivers/nvidia-drivers media-libs/mesa-vulkan-drivers media-libs/mesa-vulkan-drivers-nvk"
 	[nouveau]="x11-drivers/xf86-video-nouveau media-libs/mesa media-libs/mesa-vulkan-drivers"
 	[intel]="x11-drivers/xf86-video-intel media-libs/mesa media-libs/mesa-vulkan-drivers"
 	[mesa]="media-libs/mesa media-libs/mesa-vulkan-drivers"
@@ -133,7 +131,6 @@ declare -A GPU_DRIVER_PACKAGES=(
 declare -A GPU_DRIVER_USE_FLAGS=(
 	[amd]="video_cards_amdgpu video_cards_radeonsi"
 	[nvidia]="video_cards_nvidia"
-	[nvidia-nvk]="video_cards_nvidia video_cards_nvk"
 	[nouveau]="video_cards_nouveau"
 	[intel]="video_cards_intel video_cards_i965"
 	[mesa]="video_cards_amdgpu video_cards_radeonsi video_cards_nouveau video_cards_intel video_cards_i965"
@@ -143,7 +140,6 @@ declare -A GPU_DRIVER_USE_FLAGS=(
 declare -A GPU_DRIVER_KERNEL_MODULES=(
 	[amd]="amdgpu radeon"
 	[nvidia]="nvidia"
-	[nvidia-nvk]="nvidia"
 	[nouveau]="nouveau"
 	[intel]="i915"
 	[mesa]="amdgpu radeon nouveau i915"
@@ -177,7 +173,7 @@ function gpu_driver_supports_wayland() {
 	local driver="$1"
 	case "$driver" in
 		mesa|amd|intel) echo "true" ;;
-		nvidia|nvidia-nvk|nouveau) echo "false" ;;
+		nvidia|nouveau) echo "false" ;;
 		*) echo "false" ;;
 	esac
 }
@@ -188,7 +184,6 @@ function get_gpu_driver_description() {
 	case "$driver" in
 		amd) echo "AMD GPU drivers (Mesa-based, recommended for AMD cards)" ;;
 		nvidia) echo "NVIDIA proprietary drivers (best performance, closed source)" ;;
-		nvidia-nvk) echo "NVIDIA open-source drivers (NVK, experimental but promising)" ;;
 		nouveau) echo "NVIDIA open-source drivers (Nouveau, good compatibility)" ;;
 		intel) echo "Intel GPU drivers (Mesa-based, recommended for Intel cards)" ;;
 		mesa) echo "Universal Mesa drivers (open-source, best compatibility)" ;;
