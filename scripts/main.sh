@@ -1155,13 +1155,32 @@ function get_disk_device_from_partition() {
 	partition_device="$(resolve_device_by_id "$partition_id")"
 	
 	# Extract the disk device from the partition device
-	# For example: /dev/sda1 -> /dev/sda
+	# Handle various device naming patterns:
+	# /dev/sda1 -> /dev/sda (SATA/SCSI)
+	# /dev/sdb2 -> /dev/sdb
+	# /dev/hda1 -> /dev/hda (IDE)
+	# /dev/nvme0n1p1 -> /dev/nvme0n1 (NVMe)
+	# /dev/nvme0n2p2 -> /dev/nvme0n2
+	# /dev/vda1 -> /dev/vda (Virtual)
+	# /dev/xvda1 -> /dev/xvda (Xen)
 	local disk_device
-	if [[ "$partition_device" =~ ^(/dev/[a-z]+)[0-9]+$ ]]; then
+	
+	# Try to match common partition naming patterns
+	if [[ "$partition_device" =~ ^(/dev/[a-z]+[0-9]*n[0-9]+)p[0-9]+$ ]]; then
+		# NVMe devices: /dev/nvme0n1p1 -> /dev/nvme0n1
+		disk_device="${BASH_REMATCH[1]}"
+	elif [[ "$partition_device" =~ ^(/dev/[a-z]+[0-9]*)p?[0-9]+$ ]]; then
+		# SATA/SCSI/IDE/Virtual: /dev/sda1, /dev/hda1, /dev/vda1 -> /dev/sda, /dev/hda, /dev/vda
 		disk_device="${BASH_REMATCH[1]}"
 	else
-		# If it doesn't match the pattern, try to get the parent device
+		# Fallback: try to get the parent device using dirname
+		# This handles cases where the pattern doesn't match
 		disk_device="$(dirname "$partition_device")"
+		# If dirname returns "/dev", try to get the device without the partition number
+		if [[ "$disk_device" == "/dev" ]]; then
+			# Remove the last number(s) from the device name
+			disk_device="$(echo "$partition_device" | sed -E 's/[0-9]+$//')"
+		fi
 	fi
 	
 	echo "$disk_device"
