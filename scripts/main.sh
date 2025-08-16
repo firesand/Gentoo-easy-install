@@ -546,6 +546,18 @@ EOF
 	# Configure GPU drivers
 	configure_gpu_drivers
 
+	# Install performance optimization tools if enabled
+	install_performance_optimization
+
+	# Install VM testing tools if enabled
+	install_vm_testing_tools
+
+	# Install display backend testing tools if enabled
+	install_display_backend_testing
+
+	# Install GPU benchmarking tools if enabled
+	install_gpu_benchmarking
+
 	# Install additional packages, if any.
 	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
 		einfo "Installing additional packages"
@@ -854,4 +866,153 @@ function main_chroot() {
 		|| die "'$1' is not a mountpoint"
 
 	gentoo_chroot "$@"
+}
+
+function install_performance_optimization() {
+	[[ "$ENABLE_PERFORMANCE_OPTIMIZATION" != "true" ]] && return 0
+	
+	maybe_exec 'before_install_performance_optimization'
+	
+	einfo "Installing performance optimization tools"
+	
+	# Install CPU optimization tools
+	try emerge --verbose app-portage/cpuid2cpuflags
+	try emerge --verbose app-portage/resolve-march-native
+	
+	# Install system monitoring tools
+	try emerge --verbose sys-process/htop
+	try emerge --verbose sys-process/iotop
+	
+	# Install performance tuning tools
+	try emerge --verbose sys-apps/tuned
+	try emerge --verbose sys-apps/tuned-utils
+	
+	# Configure performance settings
+	einfo "Configuring performance optimization"
+	
+	# Set CPU flags for native optimization
+	if command -v cpuid2cpuflags &> /dev/null; then
+		local cpu_flags
+		cpu_flags="$(cpuid2cpuflags)"
+		if [[ -n "$cpu_flags" ]]; then
+			einfo "Setting CPU flags: $cpu_flags"
+			echo "CPU_FLAGS_X86=\"$cpu_flags\"" >> /etc/portage/make.conf
+		fi
+	fi
+	
+	# Set march flags for native optimization
+	if command -v resolve-march-native &> /dev/null; then
+		local march_flags
+		march_flags="$(resolve-march-native)"
+		if [[ -n "$march_flags" ]]; then
+			einfo "Setting march flags: $march_flags"
+			echo "CFLAGS=\"$march_flags -O2 -pipe\"" >> /etc/portage/make.conf
+			echo "CXXFLAGS=\"$march_flags -O2 -pipe\"" >> /etc/portage/make.conf
+		fi
+	fi
+	
+	maybe_exec 'after_install_performance_optimization'
+}
+
+function install_vm_testing_tools() {
+	[[ "$ENABLE_VM_TESTING_TOOLS" != "true" ]] && return 0
+	
+	maybe_exec 'before_install_vm_testing_tools'
+	
+	einfo "Installing VM testing and management tools"
+	
+	# Install QEMU and KVM tools
+	try emerge --verbose app-emulation/qemu
+	try emerge --verbose app-emulation/libvirt
+	try emerge --verbose app-emulation/virt-manager
+	
+	# Install VM performance monitoring tools
+	try emerge --verbose sys-process/htop
+	try emerge --verbose sys-process/iotop
+	try emerge --verbose sys-apps/sysstat
+	
+	# Install network testing tools
+	try emerge --verbose net-analyzer/iperf3
+	try emerge --verbose net-analyzer/nethogs
+	
+	# Copy VM testing scripts to /usr/local/bin
+	einfo "Installing VM testing scripts"
+	mkdir_or_die 0755 "/usr/local/bin"
+	
+	# Copy the enhanced VM testing tools
+	if [[ -d "$GENTOO_INSTALL_REPO_DIR/tests" ]]; then
+		cp -r "$GENTOO_INSTALL_REPO_DIR/tests" /usr/local/share/gentoo-vm-tools/
+		chmod +x /usr/local/share/gentoo-vm-tools/tests/*.sh
+		
+		# Create symlinks for easy access
+		ln -sf /usr/local/share/gentoo-vm-tools/tests/gentoo-vm-launcher.sh /usr/local/bin/gentoo-vm-launcher
+		ln -sf /usr/local/share/gentoo-vm-tools/tests/enhanced-vm-launcher.sh /usr/local/bin/enhanced-vm-launcher
+		ln -sf /usr/local/share/gentoo-vm-tools/tests/test-display-backends.sh /usr/local/bin/test-display-backends
+		
+		einfo "VM testing tools installed to /usr/local/share/gentoo-vm-tools/"
+		einfo "Quick access commands: gentoo-vm-launcher, enhanced-vm-launcher, test-display-backends"
+	fi
+	
+	maybe_exec 'after_install_vm_testing_tools'
+}
+
+function install_display_backend_testing() {
+	[[ "$ENABLE_DISPLAY_BACKEND_TESTING" != "true" ]] && return 0
+	[[ -z "$GPU_DRIVER" ]] && return 0
+	
+	maybe_exec 'before_install_display_backend_testing'
+	
+	einfo "Installing display backend testing tools"
+	
+	# Install display backend testing dependencies
+	try emerge --verbose x11-apps/xdpyinfo
+	try emerge --verbose x11-apps/xrandr
+	try emerge --verbose media-libs/mesa-demos
+	
+	# Install performance testing tools
+	try emerge --verbose media-libs/mesa-utils
+	try emerge --verbose x11-apps/glxgears
+	
+	# Install Wayland testing tools if using Wayland DE
+	if [[ "$(is_wayland_de "$DESKTOP_ENVIRONMENT")" == "true" ]]; then
+		try emerge --verbose gui-apps/wl-clipboard
+		try emerge --verbose x11-misc/wtype
+	fi
+	
+	maybe_exec 'after_install_display_backend_testing'
+}
+
+function install_gpu_benchmarking() {
+	[[ "$ENABLE_GPU_BENCHMARKING" != "true" ]] && return 0
+	[[ -z "$GPU_DRIVER" ]] && return 0
+	
+	maybe_exec 'before_install_gpu_benchmarking'
+	
+	einfo "Installing GPU benchmarking tools"
+	
+	# Install GPU benchmarking tools
+	try emerge --verbose media-libs/mesa-demos
+	try emerge --verbose media-libs/mesa-utils
+	
+	# Install specific benchmarking tools based on GPU driver
+	case "$GPU_DRIVER" in
+		amd|mesa)
+			try emerge --verbose media-libs/mesa-demos
+			try emerge --verbose media-libs/mesa-utils
+			;;
+		nvidia|nvidia-nvk)
+			try emerge --verbose media-libs/mesa-demos
+			try emerge --verbose media-libs/mesa-utils
+			;;
+		intel)
+			try emerge --verbose media-libs/mesa-demos
+			try emerge --verbose media-libs/mesa-utils
+			;;
+	esac
+	
+	# Install general benchmarking tools
+	try emerge --verbose app-benchmarks/glmark2
+	try emerge --verbose app-benchmarks/glxgears
+	
+	maybe_exec 'after_install_gpu_benchmarking'
 }
