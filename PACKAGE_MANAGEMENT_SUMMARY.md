@@ -71,10 +71,12 @@
 
 ### Installation Integration
 - Package management is applied during Gentoo installation
-- USE rules written to `/etc/portage/package.use/zz-autounmask`
-- Package keywords written to `/etc/portage/package.keywords/zz-autounmask`
-- Global ACCEPT_KEYWORDS added to `/etc/portage/make.conf`
-- Overlays managed via layman with automatic installation
+- **File Creation**: Creates actual files in `/etc/portage/` directory structure
+- **USE Rules**: Creates both comprehensive file (`zz-autounmask`) and individual package files
+- **Package Keywords**: Creates both comprehensive file (`zz-autounmask`) and individual package files  
+- **Global Keywords**: Creates dedicated `package.accept_keywords` file and adds to `make.conf`
+- **Directory Structure**: Supports both single file and organized directory approaches
+- **Overlays**: Managed via layman with automatic installation
 
 ### Error Handling
 - Comprehensive input validation
@@ -104,6 +106,49 @@
 3. Enter keyword: `~amd64`
 4. Result: `~amd64` added to global ACCEPT_KEYWORDS
 
+## File Creation Examples
+
+### Package USE Rules Files
+During installation, the system creates both comprehensive and individual files:
+
+**Comprehensive file** (`/etc/portage/package.use/zz-autounmask`):
+```
+# Package USE rules configured during installation
+# Generated automatically by gentoo-easy-install
+dev-lang/python -tk +sqlite
+app-office/libreoffice java PYTHON_SINGLE_TARGET: python3_11
+```
+
+**Individual package files** (e.g., `/etc/portage/package.use/python`):
+```
+# USE flags for dev-lang/python
+dev-lang/python -tk +sqlite
+```
+
+### Package Keywords Files
+**Comprehensive file** (`/etc/portage/package.keywords/zz-autounmask`):
+```
+# Package keywords configured during installation
+# Generated automatically by gentoo-easy-install
+media-libs/libgd ~amd64
+sys-kernel/gentoo-kernel -~amd64
+```
+
+**Individual package files** (e.g., `/etc/portage/package.keywords/libgd`):
+```
+# Keywords for media-libs/libgd
+media-libs/libgd ~amd64
+```
+
+### Global ACCEPT_KEYWORDS File
+**Dedicated file** (`/etc/portage/package.accept_keywords`):
+```
+# Global ACCEPT_KEYWORDS configured during installation
+# Generated automatically by gentoo-easy-install
+~amd64
+~x86
+```
+
 ## Benefits
 
 1. **Comprehensive Control**: Full control over package management aspects
@@ -112,6 +157,8 @@
 4. **Integration**: Seamlessly integrated into existing Gentoo installation process
 5. **Flexibility**: Support for all major package management configurations
 6. **Automation**: Reduces manual post-installation configuration
+7. **File Organization**: Creates both comprehensive and individual package files
+8. **Professional Structure**: Follows Gentoo best practices for file organization
 
 ## Testing Status
 
