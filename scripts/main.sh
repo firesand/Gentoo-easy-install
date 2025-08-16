@@ -948,7 +948,7 @@ function install_performance_optimization() {
 	
 	# Install CPU optimization tools
 	try emerge --verbose app-portage/cpuid2cpuflags
-	try emerge --verbose app-portage/resolve-march-native
+	try emerge --verbose app-misc/resolve-march-native
 	
 	# Install system monitoring tools
 	try emerge --verbose sys-process/htop
