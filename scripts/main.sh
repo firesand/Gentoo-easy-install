@@ -533,12 +533,26 @@ EOF
 	# Determine required modules based on system configuration
 	local modules=()
 	[[ $USED_RAID == "true" ]] && modules+=("mdraid")
-	[[ $USED_LUKS == "true" ]] && modules+=("crypt crypt-gpg")
+	[[ $USED_LUKS == "true" ]] && modules+=("crypt")
 	[[ $USED_BTRFS == "true" ]] && modules+=("btrfs")
 	[[ $USED_ZFS == "true" ]] && modules+=("zfs")
 	
-	# Add virtio modules for VM compatibility
-	modules+=("virtio virtio_pci virtio_net virtio_blk")
+	# Add virtio modules for VM compatibility (only if they exist)
+	if [[ -d /lib/modules/"$kver"/kernel/drivers/virtio ]]; then
+		modules+=("virtio")
+	fi
+	if [[ -d /lib/modules/"$kver"/kernel/drivers/virtio ]]; then
+		modules+=("virtio_pci")
+	fi
+	if [[ -d /lib/modules/"$kver"/kernel/drivers/net/virtio ]]; then
+		modules+=("virtio_net")
+	fi
+	if [[ -d /lib/modules/"$kver"/kernel/drivers/block/virtio ]]; then
+		modules+=("virtio_blk")
+	fi
+	
+	# Ensure we have at least basic modules
+	[[ ${#modules[@]} -eq 0 ]] && modules=("bash")
 	
 	# Get kernel version from symlink (proven method)
 	local kver
@@ -561,14 +575,15 @@ EOF
 	fi
 	
 	# Generate initramfs using proven dracut command
+	einfo "Using modules: ${modules[*]}"
 	try dracut \
 		--kver "$kver" \
 		--zstd \
 		--no-hostonly \
 		--ro-mnt \
 		--add "bash ${modules[*]}" \
-		"${dracut_opts[@]}" \
 		--force \
+		--verbose \
 		/boot/initramfs-"$kver".img
 
 	# Install cryptsetup if LUKS is used
