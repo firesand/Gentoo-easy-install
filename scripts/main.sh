@@ -591,6 +591,22 @@ EOF
 		einfo "Installing cryptsetup for LUKS support"
 		try emerge --verbose sys-fs/cryptsetup
 	fi
+	
+	# Install filesystem tools based on configuration
+	if [[ $USED_BTRFS == "true" ]]; then
+		einfo "Installing BTRFS tools for BTRFS support"
+		try emerge --verbose sys-fs/btrfs-progs
+	fi
+	
+	if [[ $USED_ZFS == "true" ]]; then
+		einfo "Installing ZFS tools for ZFS support"
+		try emerge --verbose sys-fs/zfs
+	fi
+	
+	if [[ $USED_RAID == "true" ]]; then
+		einfo "Installing RAID tools for RAID support"
+		try emerge --verbose sys-fs/mdadm
+	fi
 
 	# Rebuild systemd with cryptsetup if needed
 	if [[ $SYSTEMD == "true" && $USED_LUKS == "true" ]] ; then
