@@ -1079,24 +1079,78 @@ function install_ntp_with_fallback() {
 function apply_configured_package_management() {
 	einfo "Applying configured package management settings"
 	
+	# Create package.use directory structure
+	mkdir_or_die 0755 "/etc/portage/package.use"
+	
 	# Apply package USE rules
 	if [[ ${#PACKAGE_USE_RULES[@]} -gt 0 ]]; then
 		einfo "Applying ${#PACKAGE_USE_RULES[@]} package USE rules"
+		
+		# Create a comprehensive package.use file
+		cat > /etc/portage/package.use/zz-autounmask <<EOF
+# Package USE rules configured during installation
+# Generated automatically by gentoo-easy-install
+EOF
+		
 		for rule in "${PACKAGE_USE_RULES[@]}"; do
 			if [[ -n "$rule" ]]; then
 				einfo "Applying USE rule: $rule"
 				echo "$rule" >> /etc/portage/package.use/zz-autounmask
 			fi
 		done
+		
+		# Also create individual files for better organization
+		for rule in "${PACKAGE_USE_RULES[@]}"; do
+			if [[ -n "$rule" ]]; then
+				local package_atom="${rule%% *}"
+				local use_flags="${rule#* }"
+				
+				if [[ -n "$package_atom" && -n "$use_flags" ]]; then
+					local package_name="${package_atom##*/}"
+					local package_file="/etc/portage/package.use/${package_name}"
+					
+					einfo "Creating package.use file for $package_atom"
+					echo "# USE flags for $package_atom" > "$package_file"
+					echo "$package_atom $use_flags" >> "$package_file"
+				fi
+			fi
+		done
 	fi
+	
+	# Create package.keywords directory structure
+	mkdir_or_die 0755 "/etc/portage/package.keywords"
 	
 	# Apply package keywords
 	if [[ ${#PACKAGE_KEYWORDS[@]} -gt 0 ]]; then
 		einfo "Applying ${#PACKAGE_KEYWORDS[@]} package keywords"
+		
+		# Create a comprehensive package.keywords file
+		cat > /etc/portage/package.keywords/zz-autounmask <<EOF
+# Package keywords configured during installation
+# Generated automatically by gentoo-easy-install
+EOF
+		
 		for keyword_rule in "${PACKAGE_KEYWORDS[@]}"; do
 			if [[ -n "$keyword_rule" ]]; then
 				einfo "Applying package keyword: $keyword_rule"
 				echo "$keyword_rule" >> /etc/portage/package.keywords/zz-autounmask
+			fi
+		done
+		
+		# Also create individual files for better organization
+		for keyword_rule in "${PACKAGE_KEYWORDS[@]}"; do
+			if [[ -n "$keyword_rule" ]]; then
+				local package_atom="${keyword_rule%% *}"
+				local keywords="${keyword_rule#* }"
+				
+				if [[ -n "$package_atom" && -n "$keywords" ]]; then
+					local package_name="${package_atom##*/}"
+					local package_file="/etc/portage/package.keywords/${package_name}"
+					
+					einfo "Creating package.keywords file for $package_atom"
+					echo "# Keywords for $package_atom" > "$package_file"
+					echo "$package_atom $keywords" >> "$package_file"
+				fi
 			fi
 		done
 	fi
@@ -1115,6 +1169,21 @@ function apply_configured_package_management() {
 		if [[ -n "$keywords_string" ]]; then
 			einfo "Setting ACCEPT_KEYWORDS: $keywords_string"
 			echo "ACCEPT_KEYWORDS=\"$keywords_string\"" >> /etc/portage/make.conf
+		fi
+		
+		# Also create a dedicated package.accept_keywords file for better organization
+		if [[ ${#ACCEPT_KEYWORDS[@]} -gt 0 ]]; then
+			einfo "Creating package.accept_keywords file"
+			cat > /etc/portage/package.accept_keywords <<EOF
+# Global ACCEPT_KEYWORDS configured during installation
+# Generated automatically by gentoo-easy-install
+EOF
+			
+			for keyword in "${ACCEPT_KEYWORDS[@]}"; do
+				if [[ -n "$keyword" ]]; then
+					echo "$keyword" >> /etc/portage/package.accept_keywords
+				fi
+			done
 		fi
 	fi
 	
