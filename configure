@@ -105,7 +105,94 @@ function get_all_keymaps() {
 }
 
 function get_all_timezones() {
-	readarray -t ALL_TIMEZONES < <(find /usr/share/zoneinfo -type f -printf "%P\n" | sort -u)
+	einfo "Detecting available timezones..."
+	
+	# Check if /usr/share/zoneinfo exists
+	if [[ ! -d "/usr/share/zoneinfo" ]]; then
+		ewarn "/usr/share/zoneinfo directory not found!"
+		ALL_TIMEZONES=()
+		return 1
+	fi
+	
+	# Try to find timezone files
+	local timezone_files
+	timezone_files=$(find /usr/share/zoneinfo -type f -printf "%P\n" 2>/dev/null | sort -u)
+	
+	if [[ -z "$timezone_files" ]]; then
+		ewarn "No timezone files found in /usr/share/zoneinfo"
+		ALL_TIMEZONES=()
+		return 1
+	fi
+	
+	# Convert to array
+	readarray -t ALL_TIMEZONES < <(echo "$timezone_files")
+	
+	einfo "Successfully detected ${#ALL_TIMEZONES[@]} timezones"
+	
+	# Debug: Show first few timezones
+	if [[ ${#ALL_TIMEZONES[@]} -gt 0 ]]; then
+		einfo "Sample timezones: ${ALL_TIMEZONES[*]:0:5}"
+	fi
+	
+	# If still no timezones, provide a fallback list
+	if [[ ${#ALL_TIMEZONES[@]} -eq 0 ]]; then
+		ewarn "Using fallback timezone list"
+		ALL_TIMEZONES=(
+			"UTC"
+			"Europe/London"
+			"Europe/Paris"
+			"Europe/Berlin"
+			"Europe/Rome"
+			"Europe/Madrid"
+			"Europe/Amsterdam"
+			"Europe/Brussels"
+			"Europe/Vienna"
+			"Europe/Zurich"
+			"Europe/Stockholm"
+			"Europe/Oslo"
+			"Europe/Copenhagen"
+			"Europe/Helsinki"
+			"Europe/Warsaw"
+			"Europe/Prague"
+			"Europe/Budapest"
+			"Europe/Bucharest"
+			"Europe/Sofia"
+			"Europe/Athens"
+			"Europe/Istanbul"
+			"Europe/Moscow"
+			"Asia/Tokyo"
+			"Asia/Shanghai"
+			"Asia/Seoul"
+			"Asia/Singapore"
+			"Asia/Hong_Kong"
+			"Asia/Bangkok"
+			"Asia/Jakarta"
+			"Asia/Manila"
+			"Asia/Kolkata"
+			"Asia/Dubai"
+			"Asia/Tehran"
+			"Asia/Jerusalem"
+			"Africa/Cairo"
+			"Africa/Lagos"
+			"Africa/Johannesburg"
+			"Africa/Nairobi"
+			"America/New_York"
+			"America/Chicago"
+			"America/Denver"
+			"America/Los_Angeles"
+			"America/Toronto"
+			"America/Vancouver"
+			"America/Mexico_City"
+			"America/Sao_Paulo"
+			"America/Buenos_Aires"
+			"Australia/Sydney"
+			"Australia/Melbourne"
+			"Australia/Perth"
+			"Pacific/Auckland"
+			"Pacific/Honolulu"
+		)
+		einfo "Fallback timezone list loaded with ${#ALL_TIMEZONES[@]} timezones"
+	fi
 }
 
 function recalculate_locales() {
@@ -1254,6 +1341,34 @@ function TIMEZONE_label() { echo "($TIMEZONE)"; }
 function TIMEZONE_show()  { return 0; }
 function TIMEZONE_help()  { echo "The timezone for the new system."; }
 function TIMEZONE_menu()  {
+	# Debug: Check if timezones are available
+	if [[ ${#ALL_TIMEZONES[@]} -eq 0 ]]; then
+		ewarn "No timezones found! Attempting to reload timezone list..."
+		get_all_timezones
+		
+		if [[ ${#ALL_TIMEZONES[@]} -eq 0 ]]; then
+			ewarn "Still no timezones found. Checking /usr/share/zoneinfo..."
+			if [[ ! -d "/usr/share/zoneinfo" ]]; then
+				ewarn "/usr/share/zoneinfo directory not found!"
+				dialog --msgbox "Error: Timezone data not available. Please ensure timezone data is installed." 8 60
+				return 1
+			fi
+			
+			# Try alternative timezone detection
+			ewarn "Trying alternative timezone detection..."
+			readarray -t ALL_TIMEZONES < <(find /usr/share/zoneinfo -type f -printf "%P\n" 2>/dev/null | sort -u)
+			
+			if [[ ${#ALL_TIMEZONES[@]} -eq 0 ]]; then
+				ewarn "Alternative detection also failed!"
+				dialog --msgbox "Error: Could not detect timezones. Please check your system." 8 60
+				return 1
+			fi
+		fi
+	fi
+	
+	# Debug: Show timezone count
+	einfo "Found ${#ALL_TIMEZONES[@]} timezones"
+	
 	if menu_radiolist \
 		"Select timezone" \
 		"Select which timezone to use." \
