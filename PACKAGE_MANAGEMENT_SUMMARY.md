@@ -34,7 +34,7 @@
 - **Edit**: Modify existing ACCEPT_KEYWORDS
 - **Remove**: Remove ACCEPT_KEYWORDS
 - **View**: Display all configured ACCEPT_KEYWORDS
-- **Format**: `keyword` (e.g., `~amd64`, `~x86`)
+- **Format**: `keyword` (e.g., `~amd64` for testing, `amd64` for stable)
 
 #### Overlay Manager (`overlay_manager`)
 - **Add**: Add new portage overlays with URL and name
@@ -103,8 +103,8 @@
 ### Setting Global Keywords
 1. Navigate to "Accept keywords" in configure menu
 2. Select "Add keyword"
-3. Enter keyword: `~amd64`
-4. Result: `~amd64` added to global ACCEPT_KEYWORDS
+3. Enter keyword: `~amd64` (for testing) or `amd64` (for stable)
+4. Result: Keyword added to global ACCEPT_KEYWORDS
 
 ## File Creation Examples
 
@@ -146,7 +146,7 @@ media-libs/libgd ~amd64
 # Global ACCEPT_KEYWORDS configured during installation
 # Generated automatically by gentoo-easy-install
 ~amd64
-~x86
+amd64
 ```
 
 ## Benefits
