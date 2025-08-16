@@ -466,7 +466,8 @@ function install_base_system() {
 
 function configure_kernel() {
 	einfo "Configuring Linux kernel"
-	
+
+    local virtio_drivers=""
 	# Install filesystem tools BEFORE kernel/dracut installation
 	# These are required for dracut to properly handle filesystem modules
 	if [[ $USED_BTRFS == "true" ]]; then
@@ -576,7 +577,13 @@ EOF
 		dracut_opts+=("--install" "/etc/systemd/network/20-wired.network")
 		modules+=("systemd-networkd")
 	fi
-	
+ 
+	# Conditionally add virtio drivers for VM compatibility
+	if systemd-detect-virt -q; then
+		einfo "Virtual machine detected, adding virtio drivers to initramfs"
+		virtio_drivers="virtio virtio_pci virtio_net virtio_blk"
+	fi
+ 
 	# Generate initramfs using proven dracut command
 	einfo "Using modules: ${modules[*]}"
 	try dracut \
@@ -585,7 +592,7 @@ EOF
 		--no-hostonly \
 		--ro-mnt \
 		--add "bash ${modules[*]}" \
-		--add-drivers "virtio virtio_pci virtio_net virtio_blk" \
+		${virtio_drivers:+--add-drivers "$virtio_drivers"} \
 		--force \
 		--verbose \
 		"/boot/initramfs-$kver.img"
