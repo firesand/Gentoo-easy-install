@@ -4,6 +4,18 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/protection.sh" || exit 1
 # shellcheck source=./scripts/desktop_environments.sh
 source "$GENTOO_INSTALL_REPO_DIR/scripts/desktop_environments.sh" || exit 1
 
+# Proactively initialize config arrays to prevent "unbound variable" errors
+# with older config files when using 'set -u'.
+# The ':=()' syntax assigns an empty array only if the variable is unset.
+: "${ADDITIONAL_PACKAGES:=()}"
+: "${DESKTOP_ADDITIONAL_PACKAGES:=()}"
+: "${GRUB_CUSTOM_PARAMS:=()}"
+: "${PACKAGE_USE_RULES:=()}"
+: "${PACKAGE_KEYWORDS:=()}"
+: "${OVERLAY_URLS:=()}"
+: "${OVERLAY_NAMES:=()}"
+: "${HYPRLAND_CONFIG:=}" # For string variables, use := ""
+
 # IMPORTANT: NetworkManager and dhcpcd service conflicts are handled in configure_openrc()
 # Only one network management service should run at a time to avoid unpredictable results
 
@@ -1506,7 +1518,7 @@ function finalize_installation() {
 		einfo "Groups: $user_groups"
 		
 		# Apply the custom Hyprland configuration for the new user
-		if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" && -n "$HYPRLAND_CONFIG" ]]; then
+		if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" && -v HYPRLAND_CONFIG && -n "$HYPRLAND_CONFIG" ]]; then
 			einfo "Applying custom Hyprland configuration for user $CREATE_USER..."
 			local user_home="/home/$CREATE_USER"
 			local hypr_config_dir="$user_home/.config/hypr"
@@ -2004,7 +2016,7 @@ function install_desktop_environment() {
 	fi
 	
 	# Install Hyprland-specific dependencies if configuration is provided
-	if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" && -n "$HYPRLAND_CONFIG" ]]; then
+	if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" && -v HYPRLAND_CONFIG && -n "$HYPRLAND_CONFIG" ]]; then
 		einfo "Installing Hyprland configuration dependencies..."
 		
 		# Parse the configuration to identify required packages
@@ -2122,7 +2134,7 @@ function configure_kde_use_flags() {
 		|| die "Could not write KDE Plasma USE flags to /etc/portage/package.use/kde-plasma"
 	
 	# Also set NetworkManager USE flag for KDE applications if they're installed
-	if [[ -n "${DE_ADDITIONAL_PACKAGES[kde]}" ]] || [[ ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+	if [[ -v DE_ADDITIONAL_PACKAGES && -n "${DE_ADDITIONAL_PACKAGES[kde]}" ]] || [[ ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
 		einfo "Setting NetworkManager USE flag for KDE applications"
 		echo "kde-apps/kde-apps-meta networkmanager" >> /etc/portage/package.use/kde-apps \
 			|| ewarn "Could not append KDE apps USE flags"
