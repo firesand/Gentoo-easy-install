@@ -133,8 +133,62 @@ function configure_portage() {
 		chmod 644 /etc/portage/gnupg/pubring.kbx
 	fi
 
+	# Configure bleeding edge testing if enabled
+	if [[ "${USE_PORTAGE_TESTING:-false}" == "true" ]]; then
+		einfo "Enabling bleeding edge testing for architecture: $GENTOO_ARCH"
+		echo "ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"" >> /etc/portage/make.conf
+		einfo "Added ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\" to /etc/portage/make.conf"
+		einfo "Note: This enables testing branch packages which may be less stable"
+		einfo "You can disable this later by removing the ACCEPT_KEYWORDS line from /etc/portage/make.conf"
+	else
+		einfo "Using stable branch packages (default)"
+		einfo "To enable testing branch later, add ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\" to /etc/portage/make.conf"
+	fi
+
 	chmod 644 /etc/portage/make.conf \
 		|| die "Could not chmod 644 /etc/portage/make.conf"
+	
+	# Verify Portage configuration
+	verify_portage_configuration
+}
+
+function verify_portage_configuration() {
+	einfo "Verifying Portage configuration"
+	
+	# Check if make.conf exists and is readable
+	if [[ ! -f /etc/portage/make.conf ]]; then
+		ewarn "Warning: /etc/portage/make.conf not found"
+		return 1
+	fi
+	
+	# Check ACCEPT_KEYWORDS setting
+	if [[ "${USE_PORTAGE_TESTING:-false}" == "true" ]]; then
+		if grep -q "ACCEPT_KEYWORDS.*~$GENTOO_ARCH" /etc/portage/make.conf; then
+			einfo "✓ ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\" is properly configured"
+			einfo "  Testing branch packages are enabled for $GENTOO_ARCH"
+		else
+			ewarn "Warning: ACCEPT_KEYWORDS setting not found in /etc/portage/make.conf"
+			ewarn "Bleeding edge testing may not be enabled"
+		fi
+	else
+		if grep -q "ACCEPT_KEYWORDS.*~$GENTOO_ARCH" /etc/portage/make.conf; then
+			ewarn "Warning: ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\" found but USE_PORTAGE_TESTING is false"
+			ewarn "This may indicate a configuration inconsistency"
+		else
+			einfo "✓ Stable branch packages are configured (default)"
+		fi
+	fi
+	
+	# Check binary package configuration if enabled
+	if [[ "${ENABLE_BINPKG:-false}" == "true" ]]; then
+		if grep -q 'FEATURES.*getbinpkg' /etc/portage/make.conf; then
+			einfo "✓ Binary package support is properly configured"
+		else
+			ewarn "Warning: Binary package support may not be properly configured"
+		fi
+	fi
+	
+	einfo "Portage configuration verification completed"
 }
 
 function enable_sshd() {
