@@ -684,6 +684,8 @@ function main_install() {
 }
 
 function main_install_gentoo_in_chroot() {
+    # FIX 1: Ensure variables are loaded inside the chroot
+    source "$GENTOO_INSTALL_REPO_DIR/gentoo.conf" || die "Could not load config inside chroot"
 	[[ $# == 0 ]] || die "Too many arguments"
 
 	einfo "Continuing installation inside chroot environment"
@@ -1123,11 +1125,11 @@ function configure_advanced_grub() {
 	fi
 	
 	# Add custom parameters from user configuration
-	if [[ -v GRUB_CUSTOM_PARAMS && ${#GRUB_CUSTOM_PARAMS[@]} -gt 0 ]]; then
-		local user_params="${GRUB_CUSTOM_PARAMS[*]}"
-		custom_params="$custom_params $user_params"
-		einfo "Adding user custom parameters: $user_params"
-	fi
+	if [[ -n "${GRUB_CUSTOM_PARAMS[*]-}" ]]; then
+    local user_params="${GRUB_CUSTOM_PARAMS[*]}"
+    custom_params="$custom_params $user_params"
+    einfo "Adding user custom parameters: $user_params"
+    fi
 	
 	# Write kernel parameters to GRUB configuration
 	if [[ -n "$custom_params" ]]; then
