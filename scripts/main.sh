@@ -278,19 +278,12 @@ function generate_initramfs() {
 #!/bin/bash
 kver="\$1"
 output="\$2" # At setup time, this was "$output"
-[[ -n "\$kver" ]] || { echo "usage \$0 <kernel_version> <output>" >&2; exit 1; }
+[[ -n "\$kver" ]] || { echo "usage: \$0 <kernel_version> <output>" >&2; exit 1; }
 
-# Determine required dracut and kernel modules based on system configuration
-dracut_modules=("bash")
-kernel_drivers=()
-
-# Populate dracut modules (scripts, tools)
-[[ "\$USED_RAID" == "true" ]] && dracut_modules+=("mdraid")
-[[ "\$USED_LUKS" == "true" ]] && dracut_modules+=("crypt" "crypt-gpg")
-[[ "\$USED_ZFS" == "true" ]] && dracut_modules+=("zfs")
-
-# Populate kernel drivers (filesystem support)
-[[ "\$USED_BTRFS" == "true" ]] && kernel_drivers+=("btrfs")
+	# Dracut modules and drivers are hardcoded from the installation environment
+	# This ensures the script works regardless of the user's current shell environment
+	dracut_modules=(${dracut_modules[*]})
+	kernel_drivers=(${kernel_drivers[*]})
 
 dracut \\
 	--kver          "\$kver" \\
