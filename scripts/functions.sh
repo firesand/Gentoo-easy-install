@@ -255,17 +255,30 @@ function disk_create_partition() {
 		|| die "Could not create new gpt partition ($new_id) on '$device' ($id)"
 	partprobe "$device"
 
-	# On some system, we need to wait a bit for the partition to show up.
-	local new_device
-	new_device="$(resolve_device_by_id "$new_id")" \
-		|| die "Could not resolve new device with id=$new_id"
-	for i in {1..10}; do
-		[[ -e "$new_device" ]] && break
-		[[ "$i" -eq 1 ]] && printf "Waiting for partition (%s) to appear..." "$new_device"
-		printf " %s" "$((10 - i + 1))"
-		sleep 1
-		[[ "$i" -eq 10 ]] && echo
-	done
+	# Wait for udev to finish processing the new partition
+	einfo "Waiting for partition to become available..."
+	
+	# Use udevadm settle to wait for udev to finish processing device events
+	# This is more reliable than arbitrary sleep loops
+	if command -v udevadm >/dev/null 2>&1; then
+		einfo "Using udevadm settle to wait for partition availability"
+		udevadm settle --timeout=30 || ewarn "udevadm settle timed out, continuing anyway"
+	else
+		einfo "udevadm not available, using fallback method"
+		# Fallback: brief wait for partition to appear
+		local new_device
+		new_device="$(resolve_device_by_id "$new_id")" \
+			|| die "Could not resolve new device with id=$new_id"
+		
+		# Wait up to 5 seconds with shorter intervals
+		for i in {1..5}; do
+			[[ -e "$new_device" ]] && break
+			[[ "$i" -eq 1 ]] && printf "Waiting for partition (%s) to appear..." "$new_device"
+			printf " %s" "$((5 - i + 1))"
+			sleep 0.5
+			[[ "$i" -eq 5 ]] && echo
+		done
+	fi
 }
 
 function disk_create_raid() {

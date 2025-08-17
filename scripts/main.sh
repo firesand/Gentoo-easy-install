@@ -863,16 +863,46 @@ EOF
 
 	# Generate initramfs using proven dracut command
 	einfo "Using modules: ${modules[*]}"
-	try dracut \
-		--kver "$kver" \
-		--zstd \
-		--no-hostonly \
-		--ro-mnt \
-		--add "bash ${modules[*]}" \
-		${virtio_drivers:+--add-drivers "$virtio_drivers"} \
-		--force \
-		--verbose \
-		"/boot/initramfs-$kver.img"
+	
+	# Separate bash (file) from kernel modules (drivers)
+	local bash_module=""
+	local kernel_modules=()
+	
+	# Extract bash if present, collect other modules
+	for module in "${modules[@]}"; do
+		if [[ "$module" == "bash" ]]; then
+			bash_module="bash"
+		else
+			kernel_modules+=("$module")
+		fi
+	done
+	
+	# Build dracut command with proper flags
+	local dracut_cmd=(
+		dracut
+		--kver "$kver"
+		--zstd
+		--no-hostonly
+		--ro-mnt
+		--force
+		--verbose
+	)
+	
+	# Add bash module if present (--add for files)
+	[[ -n "$bash_module" ]] && dracut_cmd+=(--add "$bash_module")
+	
+	# Add kernel modules (--add-drivers for kernel modules)
+	[[ ${#kernel_modules[@]} -gt 0 ]] && dracut_cmd+=(--add-drivers "${kernel_modules[*]}")
+	
+	# Add virtio drivers if in VM
+	[[ -n "$virtio_drivers" ]] && dracut_cmd+=(--add-drivers "$virtio_drivers")
+	
+	# Add output file
+	dracut_cmd+=("/boot/initramfs-$kver.img")
+	
+	# Execute dracut command
+	einfo "Executing: ${dracut_cmd[*]}"
+	try "${dracut_cmd[@]}"
 
 	# Install cryptsetup if LUKS is used
 	if [[ $USED_LUKS == "true" ]]; then
