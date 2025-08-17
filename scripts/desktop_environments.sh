@@ -63,18 +63,26 @@ declare -A DE_DEFAULT_NM=(
 
 # Essential packages that are critical for each DE to function properly
 # These packages are ALWAYS installed and cannot be overridden by user configuration
+# 
+# CRITICAL: These packages include:
+# - Input drivers (xf86-input-libinput) for keyboard, mouse, and touchpad functionality
+# - Desktop-specific tools (kwallet-pam, gnome-shell, waybar)
+# - Wayland ecosystem packages (pipewire, wireplumber, xdg-desktop-portal) for Hyprland
+# - Session management tools for proper desktop environment startup
+# 
+# Without these packages, desktop environments may fail to start or have limited functionality.
 declare -A DE_ESSENTIAL_PACKAGES=(
-    [kde]="kde-plasma/kwallet-pam"
-    [gnome]="gnome-base/gnome-shell"
-    [hyprland]="gui-apps/waybar"
-    [xfce]="xfce-base/xfce4-session"
-    [cinnamon]="gnome-base/gnome-session"
-    [mate]="mate-base/mate-session-manager"
-    [budgie]="gnome-base/gnome-session"
-    [i3]="gui-wm/i3"
-    [sway]="gui-wm/sway"
-    [openbox]="gui-wm/openbox"
-    [fluxbox]="gui-wm/fluxbox"
+    [kde]="kde-plasma/kwallet-pam x11-drivers/xf86-input-libinput"
+    [gnome]="gnome-base/gnome-shell x11-drivers/xf86-input-libinput"
+    [hyprland]="gui-apps/waybar media-video/pipewire media-sound/wireplumber xdg-desktop-portal xdg-desktop-portal-wlr x11-drivers/xf86-input-libinput"
+    [xfce]="xfce-base/xfce4-session x11-drivers/xf86-input-libinput"
+    [cinnamon]="gnome-base/gnome-session x11-drivers/xf86-input-libinput"
+    [mate]="mate-base/mate-session-manager x11-drivers/xf86-input-libinput"
+    [budgie]="gnome-base/gnome-session x11-drivers/xf86-input-libinput"
+    [i3]="gui-wm/i3 x11-drivers/xf86-input-libinput"
+    [sway]="gui-wm/sway x11-drivers/xf86-input-libinput"
+    [openbox]="gui-wm/openbox x11-drivers/xf86-input-libinput"
+    [fluxbox]="gui-wm/fluxbox x11-drivers/xf86-input-libinput"
 )
 
 # Additional packages that are commonly needed for DEs
@@ -82,7 +90,7 @@ declare -A DE_ESSENTIAL_PACKAGES=(
 declare -A DE_ADDITIONAL_PACKAGES=(
     [kde]="kde-apps/konsole kde-apps/dolphin kde-apps/kate"
     [gnome]="gnome-extra/gnome-tweaks gnome-extra/gnome-software"
-    [hyprland]="gui-apps/wofi gui-apps/kitty"
+    [hyprland]="gui-apps/wofi gui-apps/kitty xfce-extra/xfce4-terminal"
     [xfce]="xfce-extra/xfce4-goodies"
     [cinnamon]="gnome-extra/gnome-tweaks"
     [mate]="mate-extra/mate-tweak"

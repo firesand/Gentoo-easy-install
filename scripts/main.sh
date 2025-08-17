@@ -1797,6 +1797,11 @@ function install_stage3() {
 }
 
 function install_desktop_environment() {
+	# CRITICAL: This function sets the correct Portage profile before installing desktop environments
+	# Portage profiles are essential because they set dozens of critical, system-wide USE flags
+	# required for graphical environments, such as X, gtk, dbus, policykit, and udisks.
+	# Without the correct profile, desktop environments may be broken or incomplete.
+	
 	[[ -z "$DESKTOP_ENVIRONMENT" ]] && return 0
 	
 	maybe_exec 'before_install_desktop_environment'
@@ -1809,6 +1814,61 @@ function install_desktop_environment() {
 		ewarn "Installation may fail or the DE may not work properly"
 		if ! ask "Continue with $DESKTOP_ENVIRONMENT installation?"; then
 			return 1
+		fi
+	fi
+	
+	# Set the correct Portage profile based on the selected DE
+	einfo "Setting Portage profile for $DESKTOP_ENVIRONMENT..."
+	local selected_profile=""
+	
+	if [[ "$DESKTOP_ENVIRONMENT" == "kde" ]]; then
+		local kde_profile
+		if [[ "$SYSTEMD" == "true" ]]; then
+			kde_profile="desktop/plasma/systemd"
+		else
+			kde_profile="desktop/plasma"
+		fi
+		einfo "Selected KDE profile: $kde_profile"
+		try eselect profile set "$kde_profile"
+		selected_profile="$kde_profile"
+		
+	elif [[ "$DESKTOP_ENVIRONMENT" == "gnome" ]]; then
+		einfo "Setting Portage profile for GNOME..."
+		try eselect profile set desktop/gnome/systemd
+		selected_profile="desktop/gnome/systemd"
+		
+	elif [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		# For XFCE, Hyprland, and other general desktops, set the generic 'desktop' profile
+		einfo "Setting generic desktop profile for $DESKTOP_ENVIRONMENT..."
+		local desktop_profile
+		if [[ "$SYSTEMD" == "true" ]]; then
+			desktop_profile="desktop/systemd"
+		else
+			desktop_profile="desktop"
+		fi
+		einfo "Selected profile: $desktop_profile"
+		try eselect profile set "$desktop_profile"
+		selected_profile="$desktop_profile"
+	fi
+	
+	# Verify profile was set correctly
+	if [[ -n "$selected_profile" ]]; then
+		local current_profile
+		current_profile="$(eselect profile show | grep -oE '\[.*\]' | sed 's/\[\(.*\)\]/\1/')"
+		if [[ "$current_profile" == "$selected_profile" ]]; then
+			einfo "✅ Portage profile successfully set to: $current_profile"
+			einfo "This profile provides essential USE flags for desktop environments (X, gtk, dbus, policykit, udisks)"
+			
+			# Check if profile change requires system updates
+			if [[ "$current_profile" != "default/linux/amd64"* ]]; then
+				einfo "🔄 Profile change detected. You may need to update your system after installation:"
+				einfo "   emerge --update --deep --newuse @world"
+				einfo "   This ensures all packages use the new profile's USE flags"
+			fi
+		else
+			ewarn "⚠️  Profile verification failed. Expected: $selected_profile, Got: $current_profile"
+			ewarn "Desktop environment may not function properly without correct profile"
+			ewarn "You can manually set the profile with: eselect profile set $selected_profile"
 		fi
 	fi
 	
@@ -1830,7 +1890,39 @@ function install_desktop_environment() {
 	essential_packages="$(get_essential_packages_for_de "$DESKTOP_ENVIRONMENT")"
 	if [[ -n "$essential_packages" ]]; then
 		einfo "Installing essential $DESKTOP_ENVIRONMENT packages (required for functionality): $essential_packages"
-		try emerge --verbose $essential_packages
+		einfo "These packages include critical components like input drivers and desktop-specific tools"
+		
+		# Validate that essential packages are available in Portage
+		einfo "Validating essential packages availability..."
+		local packages_array=($essential_packages)
+		local missing_packages=()
+		
+		for package in "${packages_array[@]}"; do
+			if emerge --search "$package" >/dev/null 2>&1; then
+				einfo "✅ Package available: $package"
+			else
+				ewarn "⚠️  Package not found: $package"
+				missing_packages+=("$package")
+			fi
+		done
+		
+		if [[ ${#missing_packages[@]} -gt 0 ]]; then
+			ewarn "Some essential packages are not available: ${missing_packages[*]}"
+			ewarn "This may indicate a Portage sync issue or missing overlays"
+			ewarn "Consider running: emerge --sync"
+		fi
+		
+		# Install packages individually for better error handling
+		for package in "${packages_array[@]}"; do
+			einfo "Installing essential package: $package"
+			if try emerge --verbose "$package"; then
+				einfo "✅ Successfully installed: $package"
+			else
+				ewarn "⚠️  Failed to install essential package: $package"
+				ewarn "This may affect desktop environment functionality"
+				ewarn "You can try to install it manually later with: emerge --verbose $package"
+			fi
+		done
 	else
 		einfo "No essential packages defined for $DESKTOP_ENVIRONMENT"
 	fi
@@ -1849,6 +1941,18 @@ function install_desktop_environment() {
 	fi
 	
 	maybe_exec 'after_install_desktop_environment'
+	
+	# Provide user guidance about Portage profiles
+	einfo "🎯 Portage Profile Information:"
+	einfo "The installer has set your system to use the appropriate desktop profile."
+	einfo "This profile provides essential USE flags for graphical environments:"
+	einfo "  • X11 support (X, gtk, qt)"
+	einfo "  • Desktop services (dbus, policykit, udisks)"
+	einfo "  • Input device support (libinput, evdev)"
+	einfo "  • Audio/video support (pipewire, wayland)"
+	einfo ""
+	einfo "If you need to change profiles later, use: eselect profile list"
+	einfo "Current profile: $(eselect profile show | grep -oE '\[.*\]' | sed 's/\[\(.*\)\]/\1/')"
 }
 
 function configure_kde_use_flags() {
