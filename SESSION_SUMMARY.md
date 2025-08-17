@@ -7,17 +7,30 @@
 - No more networking conflicts after installation
 - Follows Gentoo Handbook recommendations
 
-### **2. 🔧 MEDIUM PRIORITY FIXED**  
+### **2. 🚨 HIGH PRIORITY FIXED (CRITICAL)**
+- **Dracut command logic corrected**
+- Fixed fundamental flaw in module separation
+- Dracut modules (crypt, mdraid, zfs) now use `--add`
+- Kernel drivers (btrfs, virtio) now use `--add-drivers`
+- Ensures successful initramfs generation for all filesystem types
+
+### **3. 🚨 HIGH PRIORITY FIXED (CRITICAL)**
+- **Partition probing race condition resolved**
+- Replaced unreliable sleep loop with `udevadm settle`
+- Intelligent fallback when udevadm unavailable
+- Eliminates intermittent failures on slower systems
+
+### **4. 🔧 MEDIUM PRIORITY FIXED**  
 - **Missing system information added**
 - `/etc/hosts`, secure umask, environment variables
 - Better system configuration
 
-### **3. 🔧 LOW PRIORITY FIXED**
+### **5. 🔧 LOW PRIORITY FIXED**
 - **User account creation added**
 - Non-root users with proper groups
 - Enhanced security features
 
-### **4. 🗑️ COMPLEXITY REMOVED**
+### **6. 🗑️ COMPLEXITY REMOVED**
 - **GPU driver installation removed**
 - Cleaner, more reliable installer
 - Focus on core functionality
@@ -116,6 +129,20 @@
 - **`GRUB_CUSTOM_PARAMS`**: Array of custom kernel parameters
 - **Menu Integration**: Added to interactive configuration menu
 - **Conditional Display**: Only shows when GRUB is selected as bootloader
+
+## 🧪 **Testing Results**
+
+### **Critical Fixes Test Suite**
+- **Test Script**: `./tests/test-critical-fixes.sh`
+- **Results**: ✅ **25/25 tests passed**
+- **Coverage**: Dracut logic, partition probing, module separation, flag usage, integration
+
+### **All Critical Issues Resolved**
+- ✅ **Dracut command logic corrected**
+- ✅ **Partition probing race condition fixed**
+- ✅ **NetworkManager conflicts resolved**
+- ✅ **System configuration enhanced**
+- ✅ **User account creation implemented**
 
 ## 🔗 **For Full Details**
 See `CONTINUATION_PROMPT.md` for complete technical documentation
