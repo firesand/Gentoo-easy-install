@@ -819,7 +819,7 @@ function install_system_tools() {
 	einfo "Installing system tools"
 	
 	# Install performance optimization tools if enabled
-	if [[ "$ENABLE_PERFORMANCE_OPTIMIZATION" == "true" ]]; then
+	if [[ "${ENABLE_PERFORMANCE_OPTIMIZATION:-false}" == "true" ]]; then
 		einfo "Installing performance optimization tools"
 		install_performance_optimization
 	fi
@@ -1683,7 +1683,7 @@ function main_chroot() {
 }
 
 function install_performance_optimization() {
-	[[ "$ENABLE_PERFORMANCE_OPTIMIZATION" != "true" ]] && return 0
+	[[ "${ENABLE_PERFORMANCE_OPTIMIZATION:-false}" != "true" ]] && return 0
 	
 	maybe_exec 'before_install_performance_optimization'
 	
@@ -1733,7 +1733,7 @@ function install_performance_optimization() {
 
 
 function install_display_backend_testing() {
-	[[ "$ENABLE_DISPLAY_BACKEND_TESTING" != "true" ]] && return 0
+	[[ "${ENABLE_DISPLAY_BACKEND_TESTING:-false}" != "true" ]] && return 0
 	
 	maybe_exec 'before_install_display_backend_testing'
 	
@@ -1752,7 +1752,7 @@ function install_display_backend_testing() {
 }
 
 function install_gpu_benchmarking() {
-	[[ "$ENABLE_GPU_BENCHMARKING" != "true" ]] && return 0
+	[[ "${ENABLE_GPU_BENCHMARKING:-false}" != "true" ]] && return 0
 	
 	maybe_exec 'before_install_gpu_benchmarking'
 	
