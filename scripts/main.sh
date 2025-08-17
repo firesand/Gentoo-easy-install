@@ -1372,16 +1372,18 @@ function finalize_installation() {
 	if [[ -n "$CREATE_USER" ]]; then
 		einfo "Creating user account: $CREATE_USER"
 		
-		# Create user with appropriate groups
-		local user_groups="users,wheel,audio,video,usb"
-		if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
-			# Add desktop-specific groups
-			case "$DESKTOP_ENVIRONMENT" in
-				kde|gnome|hyprland|xfce|cinnamon|mate|budgie|i3|sway|openbox|fluxbox)
-					user_groups="$user_groups,plugdev,input"
-					;;
-			esac
-		fi
+			# Create user with configurable groups (with desktop environment additions)
+	local user_groups="${CREATE_USER_GROUPS:-users,wheel,audio,video,usb}"
+	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		# Add desktop-specific groups if not already present
+		local desktop_groups="plugdev,input"
+		for group in $desktop_groups; do
+			if [[ "$user_groups" != *"$group"* ]]; then
+				user_groups="$user_groups,$group"
+			fi
+		done
+		einfo "Added desktop-specific groups: plugdev,input"
+	fi
 		
 		einfo "Creating user with groups: $user_groups"
 		useradd -m -G "$user_groups" -s /bin/bash "$CREATE_USER" \

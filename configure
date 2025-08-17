@@ -518,6 +518,7 @@ function load_default_config() {
 	ENABLE_SSHD=true
 	CREATE_USER=""
 	CREATE_USER_PASSWORD=""
+	CREATE_USER_GROUPS="users,wheel,audio,video,usb"  # Default user groups, comma-separated
 	ENABLE_BINPKG=false
 	ROOT_SSH_AUTHORIZED_KEYS=""
 
@@ -1005,6 +1006,7 @@ MENU_ITEMS=(
 	"ENABLE_SSHD"
 	"CREATE_USER"
 	"CREATE_USER_PASSWORD"
+	"CREATE_USER_GROUPS"
 	"ENABLE_BINPKG"
 	"ROOT_SSH_AUTHORIZED_KEYS"
 	"--------"
@@ -1710,6 +1712,19 @@ function CREATE_USER_PASSWORD_menu()  {
 	UNSAVED_CHANGES=true
 }
 
+function CREATE_USER_GROUPS_tag()   { echo " ├ User groups"; }
+function CREATE_USER_GROUPS_label() { echo " ├ (${CREATE_USER_GROUPS})"; }
+function CREATE_USER_GROUPS_show()  { [[ -n "$CREATE_USER" ]]; }
+function CREATE_USER_GROUPS_help()  { echo "Comma-separated list of groups for the new user account. Default: users,wheel,audio,video,usb. Desktop environments may add additional groups automatically."; }
+function CREATE_USER_GROUPS_menu()  {
+	dialog \
+		--title "User groups" \
+		--inputbox "Enter comma-separated groups for user '$CREATE_USER' (e.g., users,wheel,audio,video,usb):" \
+		"${INPUTBOX_SIZE[@]}" "$CREATE_USER_GROUPS"
+	CREATE_USER_GROUPS="$dialog_out"
+	UNSAVED_CHANGES=true
+}
+
 function ENABLE_BINPKG_tag()   { echo "Enable binary packages"; }
 function ENABLE_BINPKG_label() { on_off_label "$ENABLE_BINPKG"; }
 function ENABLE_BINPKG_show()  { return 0; }
@@ -2198,6 +2213,7 @@ ADDITIONAL_PACKAGES=(${ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_SSHD=${ENABLE_SSHD@Q}
 CREATE_USER=${CREATE_USER@Q}
 CREATE_USER_PASSWORD=${CREATE_USER_PASSWORD@Q}
+CREATE_USER_GROUPS=${CREATE_USER_GROUPS@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
 

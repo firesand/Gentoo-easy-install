@@ -305,6 +305,10 @@ CREATE_USER=""
 # Set password for the new user account (leave empty for interactive setting)
 CREATE_USER_PASSWORD=""
 
+# Groups for the new user account (comma-separated, e.g., "users,wheel,audio,video,usb")
+# Desktop environments may add additional groups automatically
+CREATE_USER_GROUPS="users,wheel,audio,video,usb"
+
 # Enable binary portage packages where available
 ENABLE_BINPKG=false
 
