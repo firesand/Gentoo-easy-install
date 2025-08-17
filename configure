@@ -2113,84 +2113,72 @@ function OVERLAY_MANAGER_show()  { return 0; }
 function OVERLAY_MANAGER_help()  { echo "Manage portage overlays using modern eselect repository. Add, remove, or configure overlay names (e.g., guru, steam-overlay)."; }
 function OVERLAY_MANAGER_menu()  {
     while true; do
-        # Check if we have any overlays
+        local configured_overlays=()
+        local menu_description
+        
         if [[ ${#OVERLAY_NAMES[@]} -eq 0 ]]; then
-            # No overlays configured
-            dialog --title "Portage Overlays" \
-                   --yes-label "Add" \
-                   --no-label "Back" \
-                   --yesno "\nNo overlays configured.\n\nWould you like to add a new overlay?" \
-                   10 50
-            
-            if [[ $? -eq 0 ]]; then
-                # User wants to add
-                dialog --title "Add Overlay" \
-                       --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" \
-                       10 60 ""
-                       
-                if [[ $? -eq 0 && -n "$dialog_out" ]]; then
-                    OVERLAY_NAMES+=("$dialog_out")
-                    UNSAVED_CHANGES=true
-                    continue  # Continue the loop to show the menu again
-                fi
-            fi
-            break  # Exit the loop
+            # Deskripsi saat tidak ada overlay
+            menu_description="\nNo overlays configured.\n\nChoose 'Add' to add your first overlay."
         else
-            # Build overlay list for menu
-            local configured_overlays=()
+            # Buat daftar overlay untuk ditampilkan
+            menu_description="\nConfigured overlays:\n\nSelect an overlay to REMOVE it,\nor choose 'Add' to add a new one."
             local i=1
             for name in "${OVERLAY_NAMES[@]}"; do
                 configured_overlays+=("$i")
                 configured_overlays+=("$name")
                 ((i++))
             done
+        fi
 
-            # Show menu with overlays
-            dialog --title "Portage Overlays (${#OVERLAY_NAMES[@]} configured)" \
-                   --extra-button --extra-label "Add" \
-                   --cancel-label "Back" \
-                   --ok-label "Remove" \
-                   --menu "\nConfigured overlays:\n\nSelect an overlay to REMOVE it,\nor choose 'Add' to add a new overlay." \
-                   15 60 7 \
-                   "${configured_overlays[@]}"
+        # Tampilkan menu utama dengan tombol "Add", "Remove", dan "Back"
+        dialog --title "Portage Overlays (${#OVERLAY_NAMES[@]} configured)" \
+               --extra-button --extra-label "Add" \
+               --cancel-label "Back" \
+               --ok-label "Remove" \
+               --menu "$menu_description" \
+               "${MENU_SIZE[@]}" \
+               "${configured_overlays[@]}"
 
-            local diag_exit="$?"
-            local choice="$dialog_out"
+        local diag_exit="$?"
+        local choice="$dialog_out"
 
-            if [[ $diag_exit -eq 0 && -n "$choice" ]]; then
-                # User wants to remove an overlay
+        case "$diag_exit" in
+            0) # Tombol <Remove>
+                if [[ -z "$choice" ]]; then
+                    # Jika tidak ada item yang dipilih (misalnya daftar kosong)
+                    dialog --title "Info" --msgbox "\nNo overlay selected to remove." 8 50
+                    continue
+                fi
+                
                 local index_to_remove=$((choice - 1))
                 if [[ $index_to_remove -ge 0 && $index_to_remove -lt ${#OVERLAY_NAMES[@]} ]]; then
                     local overlay_to_remove="${OVERLAY_NAMES[$index_to_remove]}"
                     
                     dialog --title "Confirm Removal" \
-                           --yesno "\nRemove overlay '$overlay_to_remove'?" \
-                           8 50
+                           --yesno "\nAre you sure you want to remove the overlay '$overlay_to_remove'?" 8 50
                            
                     if [[ $? -eq 0 ]]; then
-                        # Create new array without the removed item
-                        local new_overlays=()
-                        local j=0
-                        for overlay in "${OVERLAY_NAMES[@]}"; do
-                            if [[ $j -ne $index_to_remove ]]; then
-                                new_overlays+=("$overlay")
-                            fi
-                            ((j++))
-                        done
-                        OVERLAY_NAMES=("${new_overlays[@]}")
+                        unset 'OVERLAY_NAMES[index_to_remove]'
+                        OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
                         UNSAVED_CHANGES=true
                     fi
                 fi
-            elif [[ $diag_exit -eq 3 ]]; then
-                # User wants to add a new overlay
+                ;;
+
+            1) # Tombol <Back> atau <Cancel>
+                break
+                ;;
+
+            3) # Tombol <Add> (Extra button)
                 dialog --title "Add Overlay" \
-                       --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):\n\nCurrently configured: ${OVERLAY_NAMES[*]}" \
-                       12 60 ""
+                       --inputbox "\nEnter the name of the new overlay (e.g., guru, steam-overlay):" \
+                       10 60 ""
                        
                 if [[ $? -eq 0 && -n "$dialog_out" ]]; then
-                    # Check for duplicates
+                    # Cek duplikat
                     local already_exists=false
-                    for existing in "${OVERLAY_NAMES[@]}"; do
+                    for existing in "${OVERLAY_NAMES[@]}"
+                    do
                         if [[ "$existing" == "$dialog_out" ]]; then
                             already_exists=true
                             break
@@ -2198,19 +2186,18 @@ function OVERLAY_MANAGER_menu()  {
                     done
                     
                     if [[ "$already_exists" == true ]]; then
-                        dialog --title "Warning" \
-                               --msgbox "\nOverlay '$dialog_out' is already configured." \
-                               8 50
+                        dialog --title "Warning" --msgbox "\nOverlay '$dialog_out' is already configured." 8 50
                     else
                         OVERLAY_NAMES+=("$dialog_out")
                         UNSAVED_CHANGES=true
                     fi
                 fi
-            else
-                # User pressed Back or ESC
+                ;;
+                
+            *) # ESC
                 break
-            fi
-        fi
+                ;;
+        esac
     done
 }
 
