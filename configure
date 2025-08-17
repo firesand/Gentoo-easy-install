@@ -2053,13 +2053,21 @@ function OVERLAY_MANAGER_menu()  {
             configured_overlays+=("$((i++))" "$name")
         done
 
-        dialog --title "Portage Overlays" \
+        # Build the command in an array for robustness
+        local cmd=(dialog --title "Portage Overlays" \
                --extra-button --extra-label "Add" \
                --cancel-button "Back" \
                --ok-label "Remove" \
                --menu "Select an overlay to REMOVE, or choose ADD to add a new one." \
-               "${MENU_SIZE[@]}" \
-               "${configured_overlays[@]}"
+               "${MENU_SIZE[@]}")
+
+        # Add the list of overlays to the command
+        if [[ ${#configured_overlays[@]} -gt 0 ]]; then
+            cmd+=("${configured_overlays[@]}")
+        fi
+
+        # Execute the command
+        "${cmd[@]}"
 
         local diag_exit="$?"
         local choice="$dialog_out"

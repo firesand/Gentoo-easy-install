@@ -2472,29 +2472,38 @@ EOF
 	
 
 	
-	# Apply overlays using modern eselect repository
+	# Apply overlays using the correct 'eselect repository enable' command
 	if [[ -v OVERLAY_NAMES && ${#OVERLAY_NAMES[@]} -gt 0 ]]; then
-		einfo "Setting up ${#OVERLAY_NAMES[@]} portage overlay(s)..."
+		einfo "Configuring ${#OVERLAY_NAMES[@]} Portage overlay(s)..."
 		
-		# Install the tool to manage overlays if not present
-		if ! command -v eselect >/dev/null 2>&1; then
+		# Ensure the management tool is installed
+		if ! command -v eselect >/dev/null 2>&1 || ! eselect repository --version >/dev/null 2>&1; then
 			einfo "Installing overlay management tools..."
 			try emerge --verbose app-eselect/eselect-repository
 		fi
 		
-		# Add and sync each overlay
+		local new_overlays_enabled=false
+		# Enable each new overlay
 		for overlay_name in "${OVERLAY_NAMES[@]}"; do
-			if ! eselect repository list | grep -q "^$overlay_name$"; then
-				einfo "Adding overlay: $overlay_name"
-				try eselect repository add "$overlay_name"
-				try emerge --sync "$overlay_name"
+			if ! eselect repository list -i | grep -q "^$overlay_name "; then
+				einfo "Enabling overlay: $overlay_name"
+				if try eselect repository enable "$overlay_name"; then
+					new_overlays_enabled=true
+				else
+					ewarn "Failed to enable overlay '$overlay_name'. It may not be an official Gentoo overlay."
+				fi
 			else
-				einfo "Overlay '$overlay_name' is already enabled. Syncing..."
-				try emerge --sync "$overlay_name"
+				einfo "Overlay '$overlay_name' is already enabled."
 			fi
 		done
 		
-		einfo "✅ All overlays successfully enabled and synced"
+		# After enabling any new overlays, perform a single global sync
+		if [[ "$new_overlays_enabled" == "true" ]]; then
+		    einfo "Syncing all Portage repositories to fetch new overlays..."
+		    try emerge --sync
+		fi
+		
+		einfo "✅ All overlays successfully configured"
 	fi
 	
 	einfo "Package management configuration applied successfully"
