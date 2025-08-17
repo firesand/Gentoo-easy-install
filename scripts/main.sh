@@ -2078,7 +2078,7 @@ function install_desktop_environment() {
 		
 		# Performance monitoring
 		if echo "$HYPRLAND_CONFIG" | grep -q "corectrl"; then
-			hypr_deps+=("sys-apps/corectrl")
+			hypr_deps+=("app-misc/corectrl")
 		fi
 		
 		# Gaming tools
