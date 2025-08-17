@@ -216,15 +216,17 @@ function generate_initramfs() {
 	# Generate initramfs
 	einfo "Generating initramfs"
 
-	local modules=()
-	[[ $USED_RAID == "true" ]] \
-		&& modules+=("mdraid")
-	[[ $USED_LUKS == "true" ]] \
-		&& modules+=("crypt crypt-gpg")
-	[[ $USED_BTRFS == "true" ]] \
-		&& modules+=("btrfs")
-	[[ $USED_ZFS == "true" ]] \
-		&& modules+=("zfs")
+	# Determine required dracut and kernel modules based on system configuration
+	local dracut_modules=("bash")  # bash is always a dracut module
+	local kernel_drivers=()
+	
+	# Populate dracut modules (scripts, tools)
+	[[ $USED_RAID == "true" ]] && dracut_modules+=("mdraid")
+	[[ $USED_LUKS == "true" ]] && dracut_modules+=("crypt" "crypt-gpg")
+	[[ $USED_ZFS == "true" ]] && dracut_modules+=("zfs")
+	
+	# Populate kernel drivers (filesystem support)
+	[[ $USED_BTRFS == "true" ]] && kernel_drivers+=("btrfs")
 
 	local kver
 	kver="$(readlink /usr/src/linux)" \
@@ -241,18 +243,20 @@ function generate_initramfs() {
 			-i /usr/lib/dracut/modules.d/46sshd/sshd.service \
 			|| die "Could not replace sshd options in service file"
 		dracut_opts+=("--install" "/etc/systemd/network/20-wired.network")
-		modules+=("systemd-networkd")
+		dracut_modules+=("systemd-networkd")
 	fi
 
-	# Generate initramfs
-	# TODO --conf          "/dev/null" \
-	# TODO --confdir       "/dev/null" \
+	# Generate initramfs with proper module separation
+	einfo "Using Dracut modules: ${dracut_modules[*]}"
+	einfo "Using Kernel drivers: ${kernel_drivers[*]}"
+	
 	try dracut \
 		--kver          "$kver" \
 		--zstd \
 		--no-hostonly \
 		--ro-mnt \
-		--add           "bash ${modules[*]}" \
+		--add           "${dracut_modules[*]}" \
+		--add-drivers   "${kernel_drivers[*]}" \
 		"${dracut_opts[@]}" \
 		--force \
 		"$output"
@@ -263,13 +267,26 @@ function generate_initramfs() {
 kver="\$1"
 output="\$2" # At setup time, this was "$output"
 [[ -n "\$kver" ]] || { echo "usage \$0 <kernel_version> <output>" >&2; exit 1; }
+
+# Determine required dracut and kernel modules based on system configuration
+dracut_modules=("bash")
+kernel_drivers=()
+
+# Populate dracut modules (scripts, tools)
+[[ "\$USED_RAID" == "true" ]] && dracut_modules+=("mdraid")
+[[ "\$USED_LUKS" == "true" ]] && dracut_modules+=("crypt" "crypt-gpg")
+[[ "\$USED_ZFS" == "true" ]] && dracut_modules+=("zfs")
+
+# Populate kernel drivers (filesystem support)
+[[ "\$USED_BTRFS" == "true" ]] && kernel_drivers+=("btrfs")
+
 dracut \\
 	--kver          "\$kver" \\
 	--zstd \\
 	--no-hostonly \\
 	--ro-mnt \\
-	--add           "bash ${modules[*]}" \\
-	${dracut_opts[@]@Q} \\
+	--add           "\${dracut_modules[*]}" \\
+	--add-drivers   "\${kernel_drivers[*]}" \\
 	--force \\
 	"\$output"
 EOF
@@ -825,15 +842,17 @@ EOF
 	# Generate initramfs using the proven dracut approach
 	einfo "Generating initramfs with dracut"
 	
-	# Determine required modules based on system configuration
-	local modules=()
-	[[ $USED_RAID == "true" ]] && modules+=("mdraid")
-	[[ $USED_LUKS == "true" ]] && modules+=("crypt")
-	[[ $USED_BTRFS == "true" ]] && modules+=("btrfs")
-	[[ $USED_ZFS == "true" ]] && modules+=("zfs")
+	# Determine required dracut and kernel modules based on system configuration
+	local dracut_modules=("bash")  # bash is always a dracut module
+	local kernel_drivers=()
 	
-	# Ensure we have at least basic modules
-	[[ ${#modules[@]} -eq 0 ]] && modules=("bash")
+	# Populate dracut modules (scripts, tools)
+	[[ $USED_RAID == "true" ]] && dracut_modules+=("mdraid")
+	[[ $USED_LUKS == "true" ]] && dracut_modules+=("crypt")
+	[[ $USED_ZFS == "true" ]] && dracut_modules+=("zfs")
+	
+	# Populate kernel drivers (filesystem support)
+	[[ $USED_BTRFS == "true" ]] && kernel_drivers+=("btrfs")
 	
 	# Get kernel version from symlink (proven method)
 	local kver
@@ -852,57 +871,31 @@ EOF
 			|| die "Could not replace sshd options in service file"
 		
 		dracut_opts+=("--install" "/etc/systemd/network/20-wired.network")
-		modules+=("systemd-networkd")
+		dracut_modules+=("systemd-networkd")
 	fi
  
 	# Conditionally add virtio drivers for VM compatibility
 	if systemd-detect-virt -q; then
 		einfo "Virtual machine detected, adding virtio drivers to initramfs"
-		virtio_drivers="virtio virtio_pci virtio_net virtio_blk"
+		kernel_drivers+=("virtio" "virtio_pci" "virtio_net" "virtio_blk")
 	fi
 
 	# Generate initramfs using proven dracut command
-	einfo "Using modules: ${modules[*]}"
+	einfo "Using Dracut modules: ${dracut_modules[*]}"
+	einfo "Using Kernel drivers: ${kernel_drivers[*]}"
 	
-	# Separate bash (file) from kernel modules (drivers)
-	local bash_module=""
-	local kernel_modules=()
-	
-	# Extract bash if present, collect other modules
-	for module in "${modules[@]}"; do
-		if [[ "$module" == "bash" ]]; then
-			bash_module="bash"
-		else
-			kernel_modules+=("$module")
-		fi
-	done
-	
-	# Build dracut command with proper flags
-	local dracut_cmd=(
-		dracut
-		--kver "$kver"
-		--zstd
-		--no-hostonly
-		--ro-mnt
-		--force
-		--verbose
-	)
-	
-	# Add bash module if present (--add for files)
-	[[ -n "$bash_module" ]] && dracut_cmd+=(--add "$bash_module")
-	
-	# Add kernel modules (--add-drivers for kernel modules)
-	[[ ${#kernel_modules[@]} -gt 0 ]] && dracut_cmd+=(--add-drivers "${kernel_modules[*]}")
-	
-	# Add virtio drivers if in VM
-	[[ -n "$virtio_drivers" ]] && dracut_cmd+=(--add-drivers "$virtio_drivers")
-	
-	# Add output file
-	dracut_cmd+=("/boot/initramfs-$kver.img")
-	
-	# Execute dracut command
-	einfo "Executing: ${dracut_cmd[*]}"
-	try "${dracut_cmd[@]}"
+	# Build and execute the final dracut command
+	try dracut \
+		--kver "$kver" \
+		--zstd \
+		--no-hostonly \
+		--ro-mnt \
+		--add "${dracut_modules[*]}" \
+		--add-drivers "${kernel_drivers[*]}" \
+		"${dracut_opts[@]}" \
+		--force \
+		--verbose \
+		"/boot/initramfs-$kver.img"
 
 	# Install cryptsetup if LUKS is used
 	if [[ $USED_LUKS == "true" ]]; then
