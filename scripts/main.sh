@@ -1454,10 +1454,21 @@ function configure_openrc() {
 	# CRITICAL: Prevent NetworkManager and dhcpcd service conflicts
 	# According to Gentoo Handbook: "Only one network management service should run at a time"
 	local will_use_networkmanager="false"
-	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+	
+	# Check user's explicit network manager preference first
+	if [[ "$ENABLE_NETWORK_MANAGER" == "none" ]]; then
+		einfo "User explicitly disabled network manager - will use dhcpcd"
+		will_use_networkmanager="false"
+	elif [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		# Only auto-detect if user hasn't explicitly set it
 		local nm="${ENABLE_NETWORK_MANAGER:-auto}"
-		[[ "$nm" == "auto" ]] && nm="$(get_default_nm_for_de "$DESKTOP_ENVIRONMENT")"
+		if [[ "$nm" == "auto" ]]; then
+			nm="$(get_default_nm_for_de "$DESKTOP_ENVIRONMENT")"
+		fi
 		[[ "$nm" != "none" ]] && will_use_networkmanager="true"
+	else
+		# No desktop environment, check if user explicitly enabled network manager
+		[[ "$ENABLE_NETWORK_MANAGER" != "none" ]] && will_use_networkmanager="true"
 	fi
 	
 	# Only install and enable dhcpcd if NetworkManager is NOT being used
@@ -1465,6 +1476,7 @@ function configure_openrc() {
 		einfo "Installing dhcpcd service (NetworkManager not enabled)"
 		try emerge --verbose net-misc/dhcpcd
 		enable_service dhcpcd
+		einfo "dhcpcd service enabled - system will have network connectivity"
 	else
 		einfo "Skipping dhcpcd service (NetworkManager will handle networking)"
 		einfo "Note: NetworkManager and dhcpcd should not run simultaneously"
@@ -1475,6 +1487,9 @@ function configure_openrc() {
 	if [[ $ENABLE_SSHD == "true" ]]; then
 		enable_sshd
 	fi
+	
+	# Verify network configuration is complete
+	verify_network_configuration
 }
 
 function enable_service() {
@@ -1495,6 +1510,60 @@ function enable_sshd() {
 		try systemctl enable sshd
 	else
 		try rc-update add sshd default
+	fi
+}
+
+function verify_network_configuration() {
+	einfo "Verifying network configuration"
+	
+	local network_service_enabled="false"
+	local network_manager_enabled="false"
+	
+	# Check if dhcpcd is enabled
+	if [[ $SYSTEMD == "true" ]]; then
+		if systemctl is-enabled dhcpcd >/dev/null 2>&1; then
+			network_service_enabled="true"
+		fi
+	else
+		if rc-update show | grep -q "dhcpcd.*default"; then
+			network_service_enabled="true"
+		fi
+	fi
+	
+	# Check if NetworkManager is enabled
+	if [[ $SYSTEMD == "true" ]]; then
+		if systemctl is-enabled NetworkManager >/dev/null 2>&1; then
+			network_manager_enabled="true"
+		fi
+	else
+		if rc-update show | grep -q "NetworkManager.*default"; then
+			network_manager_enabled="true"
+		fi
+	fi
+	
+	# Verify that at least one network service is configured
+	if [[ "$network_service_enabled" == "true" || "$network_manager_enabled" == "true" ]]; then
+		einfo "Network configuration verified: system will have network connectivity"
+		if [[ "$network_service_enabled" == "true" ]]; then
+			einfo "  - dhcpcd service enabled for automatic network configuration"
+		fi
+		if [[ "$network_manager_enabled" == "true" ]]; then
+			einfo "  - NetworkManager service enabled for advanced network management"
+		fi
+	else
+		ewarn "WARNING: No network service is enabled!"
+		ewarn "The system may not have network connectivity after installation"
+		ewarn "Consider enabling either dhcpcd or NetworkManager"
+		
+		# Offer to enable dhcpcd as a fallback
+		if ask "Enable dhcpcd service to ensure network connectivity?"; then
+			einfo "Enabling dhcpcd service as fallback for network connectivity"
+			try emerge --verbose net-misc/dhcpcd
+			enable_service dhcpcd
+			einfo "dhcpcd service enabled - network connectivity ensured"
+		else
+			ewarn "No network service enabled - user must configure networking manually"
+		fi
 	fi
 }
 
