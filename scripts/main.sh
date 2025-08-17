@@ -2864,7 +2864,7 @@ function ensure_gcc_compatibility() {
 		
 		# Rebuild libtool after major GCC upgrade
 		einfo "Rebuilding libtool for new GCC compatibility..."
-		try emerge -v1 sys-devel/libtool
+		try emerge -v1 dev-build/libtool
 		
 		# Find and select the latest GCC version
 		local latest_gcc
