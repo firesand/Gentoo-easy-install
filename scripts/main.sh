@@ -2053,7 +2053,7 @@ function install_desktop_environment() {
 		
 		# Notifications
 		if echo "$HYPRLAND_CONFIG" | grep -q "mako"; then
-			hypr_deps+=("x11-misc/mako")
+			hypr_deps+=("gui-apps/mako")
 		fi
 		
 		# Clipboard history
