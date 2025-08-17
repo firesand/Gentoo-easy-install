@@ -2046,13 +2046,43 @@ function OVERLAY_MANAGER_label() { echo "${#OVERLAY_NAMES[@]} overlays"; }
 function OVERLAY_MANAGER_show()  { return 0; }
 function OVERLAY_MANAGER_help()  { echo "Manage portage overlays using modern eselect repository. Add, remove, or configure overlay names (e.g., guru, steam-overlay)."; }
 function OVERLAY_MANAGER_menu()  {
-	dialog \
-		--title "Portage Overlays" \
-		--inputbox "Enter overlay names separated by space or comma (e.g., guru steam-overlay):\n\nModern overlays are automatically discovered by eselect repository." \
-		"${INPUTBOX_SIZE[@]}" "${OVERLAY_NAMES[*]}"
-	# shellcheck disable=SC2206
-	OVERLAY_NAMES=($dialog_out)
-	UNSAVED_CHANGES=true
+    while true; do
+        local configured_overlays=()
+        local i=1
+        for name in "${OVERLAY_NAMES[@]}"; do
+            configured_overlays+=("$((i++))" "$name")
+        done
+
+        dialog --title "Portage Overlays" \
+               --extra-button --extra-label "Add" \
+               --cancel-button "Back" \
+               --ok-label "Remove" \
+               --menu "Select an overlay to REMOVE, or choose ADD to add a new one." \
+               "${MENU_SIZE[@]}" "${configured_overlays[@]}"
+
+        local diag_exit="$?"
+        local choice="$dialog_out"
+
+        if [[ $diag_exit -eq 0 ]]; then
+            # Remove selected overlay
+            local index_to_remove=$((choice - 1))
+            if [[ -v "OVERLAY_NAMES[index_to_remove]" ]]; then
+                unset 'OVERLAY_NAMES[index_to_remove]'
+                OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
+                UNSAVED_CHANGES=true
+            fi
+        elif [[ $diag_exit -eq 3 ]]; then
+            # Add a new overlay
+            dialog --title "Add Overlay" --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" "${INPUTBOX_SIZE[@]}" ""
+            if [[ $? -eq 0 && -n "$dialog_out" ]]; then
+                OVERLAY_NAMES+=("$dialog_out")
+                UNSAVED_CHANGES=true
+            fi
+        else
+            # User selected Back or pressed ESC
+            break
+        fi
+    done
 }
 
 function ENABLE_AUTO_CLEANUP_tag()   { echo "Auto cleanup on exit"; }
