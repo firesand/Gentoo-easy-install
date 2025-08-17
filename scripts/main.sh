@@ -2038,7 +2038,7 @@ function install_desktop_environment() {
 		
 		# Screenshot and clipboard tools
 		if echo "$HYPRLAND_CONFIG" | grep -q "grim\|slurp\|wl-copy"; then
-			hypr_deps+=("media-gfx/grim" "gui-apps/slurp" "gui-apps/wl-clipboard")
+			hypr_deps+=("gui-apps/grim" "gui-apps/slurp" "gui-apps/wl-clipboard")
 		fi
 		
 		# Audio control
