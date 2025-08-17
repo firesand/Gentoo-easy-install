@@ -30,6 +30,13 @@ It supports common disk layouts, various file systems like ext4, ZFS, and Btrfs,
 - **Complete Hyprland Ecosystem**: Automatic dependency detection and installation based on user configuration
 - **Optimized Package Selection**: Essential packages are always installed, additional packages are configurable
 
+### **Modern Overlay Management**
+- **Universal Overlay Support**: Users can add any overlay regardless of desktop environment choice
+- **Modern eselect Repository**: Uses current Gentoo best practices instead of outdated layman
+- **Simplified TUI Interface**: Only overlay names required (e.g., guru, steam-overlay, java-overlay)
+- **Automatic Discovery**: Overlays are automatically found and configured by eselect repository
+- **Flexible Configuration**: Add overlays for gaming, development, or any specific needs
+
 ### **Advanced Bootloader Configuration**
 - **Platform-Specific Installation**: Automatic UEFI/BIOS detection and appropriate bootloader setup
 - **RAID Boot Order Management**: Intelligent UEFI boot order optimization for RAID 1 setups
@@ -137,6 +144,19 @@ The installer provides intelligent bootloader configuration following Gentoo Han
   * **Advanced GRUB Configuration**: Easily configure custom kernel parameters, dual-boot detection with `os-prober`, and performance-tuning boot flags.
   * **RAID Boot Order Optimization**: Intelligent UEFI boot order management for RAID 1 setups.
 
+### Performance Optimization System
+
+The installer includes a comprehensive performance optimization system:
+
+  * **CPU-Specific Tuning**: Automatically detects your CPU and applies optimal compilation flags.
+  * **Performance Tools**: Installs `cpuid2cpuflags` and `resolve-march-native` for hardware-specific optimization.
+  * **Optimized Compilation**: Sets `CFLAGS`, `CXXFLAGS`, and `CPU_FLAGS_X86` for maximum performance.
+  * **Kernel Parameters**: Adds performance-tuning boot parameters like `intel_pstate=performance`.
+  * **Clear User Guidance**: Detailed help text explains exactly what optimization does and its benefits.
+  * **Recommended by Default**: Enabled by default for the best Gentoo experience.
+
+> 🚀 **Performance Tip**: The Performance Optimization option is highly recommended as it follows core Gentoo best practices. It automatically detects your CPU and applies the optimal compilation flags, ensuring software is tailored for maximum performance on your specific hardware.
+
 ### Desktop Environment Integration
 
 #### **KDE Plasma Enhanced Integration**
@@ -162,6 +182,19 @@ All desktop environments benefit from:
   * **Automatic Profile Selection**: Correct Portage profiles are set based on DE and init system choice.
   * **Essential Package Installation**: Critical packages like `x11-drivers/xf86-input-libinput` are always installed.
   * **Optimized Configurations**: USE flags and system settings are optimized for each DE.
+
+### **Portage Overlay Management**
+
+The installer provides modern, flexible overlay management:
+
+  * **Universal Access**: Add any overlay regardless of desktop environment choice.
+  * **Modern Tools**: Uses `eselect repository` instead of outdated `layman`.
+  * **Simple Configuration**: Only overlay names required (e.g., `guru`, `steam-overlay`, `java-overlay`).
+  * **Automatic Setup**: Overlays are automatically enabled and synced during installation.
+  * **Hyprland Integration**: GURU overlay is automatically added for Hyprland installations.
+  * **Flexible Usage**: Perfect for gaming (steam-overlay), development (java-overlay), or any community packages.
+
+> 💡 **Pro Tip**: You can now add overlays like `steam-overlay` for gaming packages or `java-overlay` for Java development, regardless of which desktop environment you choose. The system is much more flexible than before!
 
 ## Updating the Kernel
 
@@ -238,6 +271,10 @@ chroot /mnt            # Enter the installed system
 - **Intelligent Package Selection**: Only installs what's needed
 - **Optimized USE Flags**: Critical flags set for each desktop environment
 - **Efficient Disk Operations**: Smart partitioning and filesystem handling
+- **CPU-Specific Optimization**: Automatic detection and application of optimal compilation flags
+- **Performance Tools Integration**: Installs cpuid2cpuflags and resolve-march-native for hardware-specific tuning
+- **Kernel Performance Parameters**: Automatic addition of performance-tuning boot parameters
+- **Clear User Guidance**: Detailed help text explains exactly what optimization does and its benefits
 
 ## Attribution
 
@@ -249,5 +286,8 @@ This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/ge
   * **Enhanced Reliability**: Comprehensive error prevention and handling.
   * **Desktop Environment Support**: Complete ecosystem management for all major DEs.
   * **Advanced Bootloader Configuration**: Intelligent platform detection and optimization.
+  * **Modern Overlay Management**: Universal overlay support using current Gentoo best practices.
+  * **Performance Optimization**: Comprehensive CPU-specific tuning and performance tools integration.
+  * **Bulletproof Configuration**: Proactive variable initialization and comprehensive error prevention.
 
 Original project by [oddlama](https://github.com/oddlama) - thank you for the excellent foundation!
