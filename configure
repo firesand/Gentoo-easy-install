@@ -2058,7 +2058,8 @@ function OVERLAY_MANAGER_menu()  {
                --cancel-button "Back" \
                --ok-label "Remove" \
                --menu "Select an overlay to REMOVE, or choose ADD to add a new one." \
-               "${MENU_SIZE[@]}" "${configured_overlays[@]}"
+               "${MENU_SIZE[@]}" \
+               "${configured_overlays[@]}"
 
         local diag_exit="$?"
         local choice="$dialog_out"
