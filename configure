@@ -561,7 +561,6 @@ bind = SUPER, SPACE, exec, wofi --show drun"
 	# Package Management Configuration
 	PACKAGE_USE_RULES=()
 	PACKAGE_KEYWORDS=()
-	OVERLAY_URLS=()
 	OVERLAY_NAMES=()
 
 	# Cleanup Configuration
@@ -2032,9 +2031,9 @@ function PACKAGE_KEYWORDS_menu()  {
 
 
 function OVERLAY_MANAGER_tag()   { echo "Portage overlays"; }
-function OVERLAY_MANAGER_label() { echo "${#OVERLAY_URLS[@]} overlays"; }
+function OVERLAY_MANAGER_label() { echo "${#OVERLAY_NAMES[@]} overlays"; }
 function OVERLAY_MANAGER_show()  { return 0; }
-function OVERLAY_MANAGER_help()  { echo "Manage portage overlays (layman repositories). Add, remove, or configure overlay sources."; }
+function OVERLAY_MANAGER_help()  { echo "Manage portage overlays using modern eselect repository. Add, remove, or configure overlay names (e.g., guru, steam-overlay)."; }
 function OVERLAY_MANAGER_menu()  {
 	overlay_manager
 }
@@ -2088,135 +2087,44 @@ function package_keywords_manager() {
 
 
 
-# Overlay manager
+# Overlay manager - Modern eselect repository approach
 function overlay_manager() {
-	local action
-	local current_overlays=("${OVERLAY_URLS[@]}")
-	
 	while true; do
-		# Create action menu
-		local actions=("add" "edit" "remove" "view" "back")
-		local action_labels=("Add overlay" "Edit overlay" "Remove overlay" "View overlays" "Back to main menu")
-		
-		dialog \
-			--title "Overlay Manager" \
-			--menu "Select an action:" \
-			"${MENU_SIZE[@]}" \
-			"${#actions[@]}" \
-			"${actions[@]}" \
-			"${action_labels[@]}"
-		
-		action="$dialog_out"
-		
-		case "$action" in
-			"add")
-				local overlay_url overlay_name
-				dialog \
-					--title "Add Overlay" \
-					--form "Enter overlay URL and name:" \
-					"${INPUTBOX_SIZE[@]}" \
-					"Overlay URL:" 1 1 "" 1 20 50 0 \
-					"Overlay name:" 2 1 "" 2 20 50 0
-				
-				overlay_url="$(echo "$dialog_out" | head -1)"
-				overlay_name="$(echo "$dialog_out" | tail -1)"
-				
-				if [[ -n "$overlay_url" && -n "$overlay_name" ]]; then
-					OVERLAY_URLS+=("$overlay_url")
-					OVERLAY_NAMES+=("$overlay_name")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "Overlay added successfully!" 6 50
-				fi
-				;;
-			"edit")
-				if [[ ${#OVERLAY_URLS[@]} -eq 0 ]]; then
-					dialog --msgbox "No overlays to edit." 6 40
-					continue
-				fi
-				
-				local overlay_index
-				local overlays_display=()
-				for i in "${!OVERLAY_URLS[@]}"; do
-					overlays_display+=("$i" "${OVERLAY_NAMES[$i]} (${OVERLAY_URLS[$i]})")
-				done
-				
-				dialog \
-					--title "Edit Overlay" \
-					--menu "Select overlay to edit:" \
-					"${MENU_SIZE[@]}" \
-					"${#overlays_display[@]}" \
-					"${overlays_display[@]}"
-				
-				overlay_index="$dialog_out"
-				if [[ -n "$overlay_index" ]]; then
-					local new_url new_name
-					dialog \
-						--title "Edit Overlay" \
-						--form "Edit overlay URL and name:" \
-						"${INPUTBOX_SIZE[@]}" \
-						"Overlay URL:" 1 1 "" 1 20 50 0 \
-						"Overlay name:" 2 1 "" 2 20 50 0
-					
-					new_url="$(echo "$dialog_out" | head -1)"
-					new_name="$(echo "$dialog_out" | tail -1)"
-					
-					if [[ -n "$new_url" && -n "$new_name" ]]; then
-						OVERLAY_URLS[$overlay_index]="$new_url"
-						OVERLAY_NAMES[$overlay_index]="$new_name"
-						UNSAVED_CHANGES=true
-						dialog --msgbox "Overlay updated successfully!" 6 50
-					fi
-				fi
-				;;
-			"remove")
-				if [[ ${#OVERLAY_URLS[@]} -eq 0 ]]; then
-					dialog --msgbox "No overlays to remove." 6 40
-					continue
-				fi
-				
-				local overlay_index
-				local overlays_display=()
-				for i in "${!OVERLAY_URLS[@]}"; do
-					overlays_display+=("$i" "${OVERLAY_NAMES[$i]} (${OVERLAY_URLS[$i]})")
-				done
-				
-				dialog \
-					--title "Remove Overlay" \
-					--menu "Select overlay to remove:" \
-					"${MENU_SIZE[@]}" \
-					"${#overlays_display[@]}" \
-					"${overlays_display[@]}"
-				
-				overlay_index="$dialog_out"
-				if [[ -n "$overlay_index" ]]; then
-					unset "OVERLAY_URLS[$overlay_index]"
-					unset "OVERLAY_NAMES[$overlay_index]"
-					OVERLAY_URLS=("${OVERLAY_URLS[@]}")
-					OVERLAY_NAMES=("${OVERLAY_NAMES[@]}")
-					UNSAVED_CHANGES=true
-					dialog --msgbox "Overlay removed successfully!" 6 50
-				fi
-				;;
-			"view")
-				if [[ ${#OVERLAY_URLS[@]} -eq 0 ]]; then
-					dialog --msgbox "No overlays configured." 6 40
-				else
-					local overlays_text=""
-					for i in "${!OVERLAY_URLS[@]}"; do
-						overlays_text+="$((i+1)). ${OVERLAY_NAMES[$i]} (${OVERLAY_URLS[$i]})\n"
-					done
-					
-					dialog \
-						--title "Current Overlays" \
-						--scrolltext \
-						"${HELP_POPUP_SIZE[@]}" \
-						"$overlays_text"
-				fi
-				;;
-			"back")
-				return 0
-				;;
-		esac
+		local configured_overlays=()
+		local i=1
+		for name in "${OVERLAY_NAMES[@]}"; do
+			configured_overlays+=("$((i++))" "$name")
+		done
+
+		dialog --title "Portage Overlays" \
+			   --extra-button --extra-label "Add" \
+			   --cancel-button "Back" \
+			   --ok-label "Remove" \
+			   --menu "Select an overlay to remove, or add a new one.\n\nModern overlays like 'guru' only need their name." \
+			   "${MENU_SIZE[@]}" "${configured_overlays[@]}"
+
+		local diag_exit="$?"
+		local choice="$dialog_out"
+
+		if [[ $diag_exit -eq 0 ]]; then
+			# Remove selected
+			local index_to_remove=$((choice - 1))
+			unset 'OVERLAY_NAMES[index_to_remove]'
+			OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
+			UNSAVED_CHANGES=true
+			dialog --msgbox "Overlay removed successfully!" 6 50
+		elif [[ $diag_exit -eq 3 ]]; then
+			# Add new
+			dialog --title "Add Overlay" --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):\n\nModern overlays are automatically discovered by eselect repository." "${INPUTBOX_SIZE[@]}"
+			if [[ $? -eq 0 && -n "$dialog_out" ]]; then
+				OVERLAY_NAMES+=("$dialog_out")
+				UNSAVED_CHANGES=true
+				dialog --msgbox "Overlay '$dialog_out' added successfully!\n\nIt will be automatically enabled and synced during installation." 8 60
+			fi
+		else
+			# Back or ESC
+			break
+		fi
 	done
 }
 
@@ -2306,7 +2214,6 @@ ENABLE_NETWORK_MANAGER=${ENABLE_NETWORK_MANAGER@Q}
 
 PACKAGE_USE_RULES=(${PACKAGE_USE_RULES[@]@Q})
 PACKAGE_KEYWORDS=(${PACKAGE_KEYWORDS[@]@Q})
-OVERLAY_URLS=(${OVERLAY_URLS[@]@Q})
 OVERLAY_NAMES=(${OVERLAY_NAMES[@]@Q})
 
 # Cleanup Configuration

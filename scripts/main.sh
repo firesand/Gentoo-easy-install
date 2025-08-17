@@ -12,7 +12,6 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/desktop_environments.sh" || exit 1
 : "${GRUB_CUSTOM_PARAMS:=()}"
 : "${PACKAGE_USE_RULES:=()}"
 : "${PACKAGE_KEYWORDS:=()}"
-: "${OVERLAY_URLS:=()}"
 : "${OVERLAY_NAMES:=()}"
 : "${HYPRLAND_CONFIG:=}" # For string variables, use := ""
 
@@ -2460,30 +2459,29 @@ EOF
 	
 
 	
-	# Apply overlays
-	if [[ -v OVERLAY_URLS && ${#OVERLAY_URLS[@]} -gt 0 ]]; then
-		einfo "Setting up ${#OVERLAY_URLS[@]} portage overlays"
+	# Apply overlays using modern eselect repository
+	if [[ -v OVERLAY_NAMES && ${#OVERLAY_NAMES[@]} -gt 0 ]]; then
+		einfo "Setting up ${#OVERLAY_NAMES[@]} portage overlay(s)..."
 		
-		# Install layman if not already installed
-		if ! command -v layman >/dev/null 2>&1; then
-			einfo "Installing layman for overlay management"
-			try emerge --verbose app-portage/layman
+		# Install the tool to manage overlays if not present
+		if ! command -v eselect >/dev/null 2>&1; then
+			einfo "Installing overlay management tools..."
+			try emerge --verbose app-eselect/eselect-repository
 		fi
 		
-		# Add overlays
-		for i in "${!OVERLAY_URLS[@]}"; do
-			local overlay_url="${OVERLAY_URLS[$i]}"
-			local overlay_name="${OVERLAY_NAMES[$i]}"
-			
-			if [[ -n "$overlay_url" && -n "$overlay_name" ]]; then
-				einfo "Adding overlay: $overlay_name ($overlay_url)"
-				try layman -a "$overlay_name" -f -o "$overlay_url"
+		# Add and sync each overlay
+		for overlay_name in "${OVERLAY_NAMES[@]}"; do
+			if ! eselect repository list | grep -q "^$overlay_name$"; then
+				einfo "Adding overlay: $overlay_name"
+				try eselect repository add "$overlay_name"
+				try emerge --sync "$overlay_name"
+			else
+				einfo "Overlay '$overlay_name' is already enabled. Syncing..."
+				try emerge --sync "$overlay_name"
 			fi
 		done
 		
-		# Sync overlays
-		einfo "Syncing overlays"
-		try layman -s ALL
+		einfo "✅ All overlays successfully enabled and synced"
 	fi
 	
 	einfo "Package management configuration applied successfully"
