@@ -619,7 +619,9 @@ function on_off_str() {
 
 function on_off_label() {
 	local prefix="${2:-}"
-	on_off_str "$1" "${prefix}[*]" "${prefix}[ ]"
+	local var_name="$1"
+	local var_value="${!var_name}"
+	on_off_str "$var_value" "${prefix}[*]" "${prefix}[ ]"
 }
 
 function on_off_label_inverted() {
@@ -1926,7 +1928,7 @@ function BOOTLOADER_TYPE_menu()  {
 }
 
 function ENABLE_DUAL_BOOT_DETECTION_tag()   { echo " ├ Dual Boot Detection"; }
-function ENABLE_DUAL_BOOT_DETECTION_label() { echo " ├ ($(on_off_label ENABLE_DUAL_BOOT_DETECTION))"; }
+function ENABLE_DUAL_BOOT_DETECTION_label() { on_off_label "$ENABLE_DUAL_BOOT_DETECTION" " ├ "; }
 function ENABLE_DUAL_BOOT_DETECTION_show()  { [[ "${BOOTLOADER_TYPE:-grub}" == "grub" ]]; }
 function ENABLE_DUAL_BOOT_DETECTION_help()  { echo "Enable os-prober to detect other operating systems for dual boot support. This will automatically add Windows, Linux, and other OS entries to your GRUB menu."; }
 function ENABLE_DUAL_BOOT_DETECTION_menu()  {
@@ -1949,7 +1951,7 @@ function GRUB_CUSTOM_PARAMS_menu()  {
 }
 
 function ENABLE_PERFORMANCE_OPTIMIZATION_tag()   { echo "Performance Optimization"; }
-function ENABLE_PERFORMANCE_OPTIMIZATION_label() { echo "($(on_off_label ENABLE_PERFORMANCE_OPTIMIZATION))"; }
+function ENABLE_PERFORMANCE_OPTIMIZATION_label() { on_off_label "$ENABLE_PERFORMANCE_OPTIMIZATION"; }
 function ENABLE_PERFORMANCE_OPTIMIZATION_show()  { return 0; }
 function ENABLE_PERFORMANCE_OPTIMIZATION_help()  {
     echo "This option automates a core Gentoo best practice for system performance.
@@ -1970,7 +1972,7 @@ function ENABLE_PERFORMANCE_OPTIMIZATION_menu()  {
 
 
 function ENABLE_DISPLAY_BACKEND_TESTING_tag()   { echo "Display Backend Testing"; }
-function ENABLE_DISPLAY_BACKEND_TESTING_label() { echo "($(on_off_label ENABLE_DISPLAY_BACKEND_TESTING))"; }
+function ENABLE_DISPLAY_BACKEND_TESTING_label() { on_off_label "$ENABLE_DISPLAY_BACKEND_TESTING"; }
 function ENABLE_DISPLAY_BACKEND_TESTING_show()  { return 0; }
 function ENABLE_DISPLAY_BACKEND_TESTING_help()  { echo "Enable display backend testing tools for optimizing GTK, SDL, and SPICE performance in VM environments."; }
 function ENABLE_DISPLAY_BACKEND_TESTING_menu()  {
@@ -1979,7 +1981,7 @@ function ENABLE_DISPLAY_BACKEND_TESTING_menu()  {
 }
 
 function ENABLE_GPU_BENCHMARKING_tag()   { echo "GPU Benchmarking"; }
-function ENABLE_GPU_BENCHMARKING_label() { echo "($(on_off_label ENABLE_GPU_BENCHMARKING))"; }
+function ENABLE_GPU_BENCHMARKING_label() { on_off_label "$ENABLE_GPU_BENCHMARKING"; }
 function ENABLE_GPU_BENCHMARKING_show()  { return 0; }
 function ENABLE_GPU_BENCHMARKING_help()  { echo "Enable GPU benchmarking tools for performance testing and optimization in VM environments."; }
 function ENABLE_GPU_BENCHMARKING_menu()  {
@@ -1988,7 +1990,7 @@ function ENABLE_GPU_BENCHMARKING_menu()  {
 }
 
 function ENABLE_KDE_POLKIT_ADMIN_tag()   { echo "KDE Polkit Admin"; }
-function ENABLE_KDE_POLKIT_ADMIN_label() { echo "($(on_off_label ENABLE_KDE_POLKIT_ADMIN))"; }
+function ENABLE_KDE_POLKIT_ADMIN_label() { on_off_label "$ENABLE_KDE_POLKIT_ADMIN"; }
 function ENABLE_KDE_POLKIT_ADMIN_show()  { [[ "$DESKTOP_ENVIRONMENT" == "kde" ]]; }
 function ENABLE_KDE_POLKIT_ADMIN_help()  { echo "Grant administrative privileges to users in the wheel group for KDE system dialogs. This allows non-root users to authenticate for system operations."; }
 function ENABLE_KDE_POLKIT_ADMIN_menu()  {
@@ -1997,7 +1999,7 @@ function ENABLE_KDE_POLKIT_ADMIN_menu()  {
 }
 
 function ENABLE_KDE_KWALLET_PAM_tag()   { echo "KDE KWallet PAM"; }
-function ENABLE_KDE_KWALLET_PAM_label() { echo "($(on_off_label ENABLE_KDE_KWALLET_PAM))"; }
+function ENABLE_KDE_KWALLET_PAM_label() { on_off_label "$ENABLE_KDE_KWALLET_PAM"; }
 function ENABLE_KDE_KWALLET_PAM_show()  { [[ "$DESKTOP_ENVIRONMENT" == "kde" ]]; }
 function ENABLE_KDE_KWALLET_PAM_help()  { echo "Enable KWallet PAM integration for automatic unlocking when logging in via SDDM. This provides seamless password storage and auto-unlocking functionality."; }
 function ENABLE_KDE_KWALLET_PAM_menu()  {
