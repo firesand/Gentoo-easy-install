@@ -599,7 +599,6 @@ function main_install_gentoo_in_chroot() {
 	# GPU driver installation function removed - too complex for automated installation
 	# Users can manually install GPU drivers after installation if needed
 	# END OF NEW SECTION
-
 	# Step 9: Configure the bootloader
 	einfo "Step 9: Configuring the bootloader"
 	configure_bootloader
@@ -762,7 +761,7 @@ EOF
 		dracut_opts+=("--install" "/etc/systemd/network/20-wired.network")
 		modules+=("systemd-networkd")
 	fi
-	
+ 
 	# Conditionally add virtio drivers for VM compatibility
 	if systemd-detect-virt -q; then
 		einfo "Virtual machine detected, adding virtio drivers to initramfs"
@@ -1696,6 +1695,7 @@ function install_performance_optimization() {
 	
 	# Install system monitoring tools
 	try emerge --verbose sys-process/btop
+
 	try emerge --verbose net-misc/openssh
 	try emerge --verbose app-eselect/eselect-repository
 	# Note: dhcpcd is installed as a tool, not as a service
