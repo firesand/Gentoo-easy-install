@@ -2043,7 +2043,7 @@ function install_desktop_environment() {
 		
 		# Audio control
 		if echo "$HYPRLAND_CONFIG" | grep -q "wpctl\|playerctl"; then
-			hypr_deps+=("media-sound/wireplumber" "media-sound/playerctl")
+			hypr_deps+=("media-video/wireplumber" "media-sound/playerctl")
 		fi
 		
 		# Brightness control
