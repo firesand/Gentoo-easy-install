@@ -2046,7 +2046,13 @@ function OVERLAY_MANAGER_label() { echo "${#OVERLAY_NAMES[@]} overlays"; }
 function OVERLAY_MANAGER_show()  { return 0; }
 function OVERLAY_MANAGER_help()  { echo "Manage portage overlays using modern eselect repository. Add, remove, or configure overlay names (e.g., guru, steam-overlay)."; }
 function OVERLAY_MANAGER_menu()  {
-	overlay_manager
+	dialog \
+		--title "Portage Overlays" \
+		--inputbox "Enter overlay names separated by space or comma (e.g., guru steam-overlay):\n\nModern overlays are automatically discovered by eselect repository." \
+		"${INPUTBOX_SIZE[@]}" "${OVERLAY_NAMES[*]}"
+	# shellcheck disable=SC2206
+	OVERLAY_NAMES=($dialog_out)
+	UNSAVED_CHANGES=true
 }
 
 function ENABLE_AUTO_CLEANUP_tag()   { echo "Auto cleanup on exit"; }
@@ -2098,46 +2104,7 @@ function package_keywords_manager() {
 
 
 
-# Overlay manager - Modern eselect repository approach
-function overlay_manager() {
-	while true; do
-		local configured_overlays=()
-		local i=1
-		for name in "${OVERLAY_NAMES[@]}"; do
-			configured_overlays+=("$((i++))" "$name")
-		done
 
-		dialog --title "Portage Overlays" \
-			   --extra-button --extra-label "Add" \
-			   --cancel-button "Back" \
-			   --ok-label "Remove" \
-			   --menu "Select an overlay to remove, or add a new one.\n\nModern overlays like 'guru' only need their name." \
-			   "${MENU_SIZE[@]}" "${configured_overlays[@]}"
-
-		local diag_exit="$?"
-		local choice="$dialog_out"
-
-		if [[ $diag_exit -eq 0 ]]; then
-			# Remove selected
-			local index_to_remove=$((choice - 1))
-			unset 'OVERLAY_NAMES[index_to_remove]'
-			OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
-			UNSAVED_CHANGES=true
-			dialog --msgbox "Overlay removed successfully!" 6 50
-		elif [[ $diag_exit -eq 3 ]]; then
-			# Add new
-			dialog --title "Add Overlay" --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):\n\nModern overlays are automatically discovered by eselect repository." "${INPUTBOX_SIZE[@]}"
-			if [[ $? -eq 0 && -n "$dialog_out" ]]; then
-				OVERLAY_NAMES+=("$dialog_out")
-				UNSAVED_CHANGES=true
-				dialog --msgbox "Overlay '$dialog_out' added successfully!\n\nIt will be automatically enabled and synced during installation." 8 60
-			fi
-		else
-			# Back or ESC
-			break
-		fi
-	done
-}
 
 
 ################################################
