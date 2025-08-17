@@ -1951,7 +1951,17 @@ function GRUB_CUSTOM_PARAMS_menu()  {
 function ENABLE_PERFORMANCE_OPTIMIZATION_tag()   { echo "Performance Optimization"; }
 function ENABLE_PERFORMANCE_OPTIMIZATION_label() { echo "($(on_off_label ENABLE_PERFORMANCE_OPTIMIZATION))"; }
 function ENABLE_PERFORMANCE_OPTIMIZATION_show()  { return 0; }
-function ENABLE_PERFORMANCE_OPTIMIZATION_help()  { echo "Enable performance optimization features including CPU tuning, memory optimization, and system tweaks for better VM performance."; }
+function ENABLE_PERFORMANCE_OPTIMIZATION_help()  {
+    echo "This option automates a core Gentoo best practice for system performance.
+
+If enabled (Recommended):
+The installer will add tools (cpuid2cpuflags, resolve-march-native) to the new system. It will then automatically detect your specific CPU and write optimized compilation flags (CFLAGS, CXXFLAGS, CPU_FLAGS_X86) to /etc/portage/make.conf. This ensures that all software compiled on your system is tailored for maximum performance on your hardware.
+
+If disabled:
+The system will use generic, safe compilation flags from the default profile. The resulting system will be perfectly functional but not specifically tuned to your CPU, potentially leaving performance on the table.
+
+For a true Gentoo experience, leaving this enabled is highly recommended."
+}
 function ENABLE_PERFORMANCE_OPTIMIZATION_menu()  {
 	on_off_toggle ENABLE_PERFORMANCE_OPTIMIZATION
 	UNSAVED_CHANGES=true
@@ -2197,6 +2207,11 @@ ENABLE_RANDOM_PASSWORD=${ENABLE_RANDOM_PASSWORD@Q}
 CREATE_USER_GROUPS=${CREATE_USER_GROUPS@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
+
+# Performance and Testing Configuration
+ENABLE_PERFORMANCE_OPTIMIZATION=${ENABLE_PERFORMANCE_OPTIMIZATION@Q}
+ENABLE_DISPLAY_BACKEND_TESTING=${ENABLE_DISPLAY_BACKEND_TESTING@Q}
+ENABLE_GPU_BENCHMARKING=${ENABLE_GPU_BENCHMARKING@Q}
 
 
 ################################################
