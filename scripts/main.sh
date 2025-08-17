@@ -343,12 +343,39 @@ function install_kernel_bios() {
 	generate_syslinux_cfg > /boot/bios/syslinux/syslinux.cfg \
 		|| die "Could save generated syslinux.cfg"
 
-	# Install syslinux MBR record
-	einfo "Copying syslinux MBR record"
+	# Install syslinux MBR record - SAFER APPROACH
+	einfo "Installing syslinux MBR record using syslinux-install"
 	local gptdev
 	gptdev="$(resolve_device_by_id "${DISK_ID_PART_TO_GPT_ID[$DISK_ID_BIOS]}")" \
 		|| die "Could not resolve device with id=${DISK_ID_PART_TO_GPT_ID[$DISK_ID_BIOS]}"
-	try dd bs=440 conv=notrunc count=1 if=/usr/share/syslinux/gptmbr.bin of="$gptdev"
+	
+	# Use syslinux-install for safer MBR installation
+	if command -v syslinux-install >/dev/null 2>&1; then
+		einfo "Using syslinux-install for safe MBR installation"
+		try syslinux-install -i "$gptdev" -m
+	else
+		# Fallback: Use dd but with additional safety checks
+		einfo "syslinux-install not available, using dd with safety checks"
+		
+		# Verify the target device is actually a block device
+		if [[ ! -b "$gptdev" ]]; then
+			die "Target device $gptdev is not a block device"
+		fi
+		
+		# Check if the device is mounted (dangerous to write to mounted devices)
+		if mount | grep -q "$gptdev"; then
+			die "Target device $gptdev is mounted - refusing to write MBR for safety"
+		fi
+		
+		# Verify the syslinux MBR file exists
+		if [[ ! -f "/usr/share/syslinux/gptmbr.bin" ]]; then
+			die "syslinux MBR file /usr/share/syslinux/gptmbr.bin not found"
+		fi
+		
+		# Use dd with safety measures
+		einfo "Installing MBR to $gptdev (this operation modifies the disk)"
+		try dd bs=440 conv=notrunc count=1 if=/usr/share/syslinux/gptmbr.bin of="$gptdev"
+	fi
 }
 
 function install_kernel() {
@@ -898,6 +925,11 @@ function configure_grub_bootloader() {
 		grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=gentoo \
 			|| die "Failed to install GRUB EFI bootloader"
 		
+		# Enhanced RAID support for UEFI systems
+		if [[ "${USED_RAID:-false}" == "true" ]]; then
+			configure_raid_uefi_boot_order
+		fi
+		
 		einfo "GRUB EFI bootloader installed successfully"
 	else
 		einfo "Installing BIOS bootloader"
@@ -906,6 +938,11 @@ function configure_grub_bootloader() {
 		disk_device="$(get_disk_device_from_partition "$DISK_ID_ROOT")"
 		einfo "Installing GRUB to disk: $disk_device"
 		grub-install "$disk_device" || die "Failed to install GRUB BIOS bootloader"
+		
+		# Enhanced RAID support for BIOS systems
+		if [[ "${USED_RAID:-false}" == "true" ]]; then
+			configure_raid_bios_bootloader
+		fi
 		
 		einfo "GRUB BIOS bootloader installed successfully"
 	fi
@@ -1881,10 +1918,26 @@ function get_disk_device_from_partition() {
 	# Get the partition device from the partition ID
 	partition_device="$(resolve_device_by_id "$partition_id")"
 	
-	# NEW: Resolve the real path to handle symbolic links correctly
+	# Resolve the real path to handle symbolic links correctly
 	partition_device="$(realpath "$partition_device")"
 	
-	# Extract the disk device from the partition device
+	# Use lsblk to reliably trace the parent device of a partition
+	# This is more robust than regex patterns and handles complex storage setups
+	local disk_device
+	
+	if command -v lsblk >/dev/null 2>&1; then
+		# Use lsblk -no pkname to get the parent device name
+		# This handles LVM, software RAID, and other complex storage setups
+		disk_device="$(lsblk -no pkname "$partition_device" 2>/dev/null | head -n1)"
+		
+		if [[ -n "$disk_device" && "$disk_device" != "loop" ]]; then
+			# lsblk found a valid parent device
+			echo "/dev/$disk_device"
+			return 0
+		fi
+	fi
+	
+	# Fallback to regex patterns if lsblk is not available or fails
 	# Handle various device naming patterns:
 	# /dev/sda1 -> /dev/sda (SATA/SCSI)
 	# /dev/sdb2 -> /dev/sdb
@@ -1893,9 +1946,7 @@ function get_disk_device_from_partition() {
 	# /dev/nvme0n2p2 -> /dev/nvme0n2
 	# /dev/vda1 -> /dev/vda (Virtual)
 	# /dev/xvda1 -> /dev/xvda (Xen)
-	local disk_device
 	
-	# Try to match common partition naming patterns
 	if [[ "$partition_device" =~ ^(/dev/[a-z]+[0-9]*n[0-9]+)p[0-9]+$ ]]; then
 		# NVMe devices: /dev/nvme0n1p1 -> /dev/nvme0n1
 		disk_device="${BASH_REMATCH[1]}"
@@ -1914,4 +1965,169 @@ function get_disk_device_from_partition() {
 	fi
 	
 	echo "$disk_device"
+}
+
+function configure_raid_uefi_boot_order() {
+	[[ "${USED_RAID:-false}" == "true" ]] || return 0
+	[[ $IS_EFI == "true" ]] || return 0
+	
+	einfo "Configuring enhanced RAID support for UEFI systems"
+	
+	# Install efibootmgr for UEFI boot entry management
+	if ! command -v efibootmgr >/dev/null 2>&1; then
+		einfo "Installing efibootmgr for UEFI boot management"
+		try emerge --verbose sys-boot/efibootmgr
+	fi
+	
+	# Get all RAID member disks
+	local raid_members=()
+	local raid_devices
+	
+	# Detect RAID arrays and their member devices
+	if command -v mdadm >/dev/null 2>&1; then
+		raid_devices="$(mdadm --detail --scan 2>/dev/null | grep -o '/dev/md[0-9]*' || true)"
+		
+		for raid_device in $raid_devices; do
+			if [[ -b "$raid_device" ]]; then
+				einfo "Found RAID array: $raid_device"
+				
+				# Get member devices for this RAID array
+				local members
+				members="$(mdadm --detail "$raid_device" 2>/dev/null | grep -E '^[[:space:]]*[0-9]+[[:space:]]+[^[:space:]]+' | awk '{print $NF}' || true)"
+				
+				for member in $members; do
+					if [[ -b "$member" ]]; then
+						raid_members+=("$member")
+						einfo "  RAID member: $member"
+					fi
+				done
+			fi
+		done
+	fi
+	
+	# If we found RAID members, configure UEFI boot order
+	if [[ ${#raid_members[@]} -gt 0 ]]; then
+		einfo "Configuring UEFI boot order for ${#raid_members[@]} RAID members"
+		
+		# Get current UEFI boot entries
+		local current_boot_order
+		current_boot_order="$(efibootmgr -v 2>/dev/null | grep -E '^Boot[0-9]+' | sort | awk '{print $1}' | sed 's/Boot//' | tr '\n' ',' | sed 's/,$//' || echo '')"
+		
+		if [[ -n "$current_boot_order" ]]; then
+			einfo "Current UEFI boot order: $current_boot_order"
+			
+			# Create optimized boot order with RAID members first
+			local optimized_order=""
+			local other_entries=""
+			
+			# Separate RAID members from other boot entries
+			for entry in ${current_boot_order//,/ }; do
+				local entry_info
+				entry_info="$(efibootmgr -v 2>/dev/null | grep -E "^Boot$entry[[:space:]]" || true)"
+				
+				if [[ "$entry_info" =~ /dev/[a-z]+ ]]; then
+					local device
+					device="$(echo "$entry_info" | grep -o '/dev/[a-z]+[0-9]*' | head -n1 || true)"
+					
+					if [[ -n "$device" ]]; then
+						# Check if this device is a RAID member
+						local is_raid_member=false
+						for raid_member in "${raid_members[@]}"; do
+							if [[ "$device" == "$raid_member" ]] || [[ "$device" =~ ${raid_member%?} ]]; then
+								is_raid_member=true
+								break
+							fi
+						done
+						
+						if [[ "$is_raid_member" == "true" ]]; then
+							optimized_order="$entry,$optimized_order"
+						else
+							other_entries="$other_entries,$entry"
+						fi
+					fi
+				fi
+			done
+			
+			# Combine optimized order: RAID members first, then others
+			optimized_order="${optimized_order%,}${other_entries%,}"
+			
+			if [[ -n "$optimized_order" && "$optimized_order" != "$current_boot_order" ]]; then
+				einfo "Setting optimized UEFI boot order: $optimized_order"
+				try efibootmgr -o "$optimized_order"
+				einfo "UEFI boot order optimized for RAID redundancy"
+			else
+				einfo "UEFI boot order already optimized"
+			fi
+		fi
+		
+		# Install GRUB to each RAID member for redundancy
+		einfo "Installing GRUB to RAID member devices for redundancy"
+		for member in "${raid_members[@]}"; do
+			local member_disk
+			member_disk="$(get_disk_device_from_partition "$member")"
+			
+			if [[ -n "$member_disk" && -b "$member_disk" ]]; then
+				einfo "Installing GRUB to RAID member disk: $member_disk"
+				try grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id="gentoo-raid-$(basename "$member_disk")" "$member_disk"
+			fi
+		done
+		
+		einfo "RAID UEFI boot order configuration completed"
+		einfo "System will automatically fail over to available RAID members"
+	else
+		einfo "No RAID members detected for UEFI boot order optimization"
+	fi
+}
+
+function configure_raid_bios_bootloader() {
+	[[ "${USED_RAID:-false}" == "true" ]] || return 0
+	[[ $IS_EFI != "true" ]] || return 0
+	
+	einfo "Configuring enhanced RAID support for BIOS systems"
+	
+	# Get all RAID member disks
+	local raid_members=()
+	local raid_devices
+	
+	# Detect RAID arrays and their member devices
+	if command -v mdadm >/dev/null 2>&1; then
+		raid_devices="$(mdadm --detail --scan 2>/dev/null | grep -o '/dev/md[0-9]*' || true)"
+		
+		for raid_device in $raid_devices; do
+			if [[ -b "$raid_device" ]]; then
+				einfo "Found RAID array: $raid_device"
+				
+				# Get member devices for this RAID array
+				local members
+				members="$(mdadm --detail "$raid_device" 2>/dev/null | grep -E '^[[:space:]]*[0-9]+[[:space:]]+[^[:space:]]+' | awk '{print $NF}' || true)"
+				
+				for member in $members; do
+					if [[ -b "$member" ]]; then
+						raid_members+=("$member")
+						einfo "  RAID member: $member"
+					fi
+				done
+			fi
+		done
+	fi
+	
+	# If we found RAID members, install GRUB to each for redundancy
+	if [[ ${#raid_members[@]} -gt 0 ]]; then
+		einfo "Installing GRUB to ${#raid_members[@]} RAID member devices for redundancy"
+		
+		for member in "${raid_members[@]}"; do
+			local member_disk
+			member_disk="$(get_disk_device_from_partition "$member")"
+			
+			if [[ -n "$member_disk" && -b "$member_disk" ]]; then
+				einfo "Installing GRUB to RAID member disk: $member_disk"
+				try grub-install "$member_disk"
+			fi
+		done
+		
+		einfo "RAID BIOS bootloader configuration completed"
+		einfo "System will automatically fail over to available RAID members"
+	else
+		einfo "No RAID members detected for BIOS bootloader redundancy"
+	fi
 }
