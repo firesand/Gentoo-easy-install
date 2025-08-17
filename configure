@@ -527,7 +527,23 @@ function load_default_config() {
 	DESKTOP_ADDITIONAL_PACKAGES=()
 	ENABLE_DISPLAY_MANAGER="auto"
 	ENABLE_NETWORK_MANAGER="auto"
-
+	
+	# Hyprland Configuration (EXPERIMENTAL)
+	# Load the example configuration from contrib/hyprland.conf.example
+	if [[ -f "$GENTOO_INSTALL_REPO_DIR/contrib/hyprland.conf.example" ]]; then
+		HYPRLAND_CONFIG="$(cat "$GENTOO_INSTALL_REPO_DIR/contrib/hyprland.conf.example")"
+	else
+		# Fallback to a minimal configuration if the file doesn't exist
+		HYPRLAND_CONFIG="# Minimal Hyprland Configuration
+monitor=,preferred,auto,1
+env = XCURSOR_SIZE,24
+general { gaps_in = 5 gaps_out = 10 border_size = 2 layout = dwindle }
+decoration { rounding = 10 }
+input { kb_layout = us follow_mouse = 1 }
+bind = SUPER, RETURN, exec, kitty
+bind = SUPER, Q, killactive,
+bind = SUPER, SPACE, exec, wofi --show drun"
+	fi
 	# Bootloader Configuration
 	BOOTLOADER_TYPE="grub"  # Options: grub, systemd-boot, efistub
 	ENABLE_DUAL_BOOT_DETECTION=false  # Enable os-prober for multi-OS detection
@@ -1016,6 +1032,7 @@ MENU_ITEMS=(
 	"--------"
 	"DESKTOP_ENVIRONMENT"
 	"DESKTOP_ADDITIONAL_PACKAGES"
+	"HYPRLAND_CONFIG"
 	"ENABLE_DISPLAY_MANAGER"
 	"ENABLE_NETWORK_MANAGER"
 	"--------"
@@ -1818,6 +1835,31 @@ function DESKTOP_ADDITIONAL_PACKAGES_menu()  {
 	UNSAVED_CHANGES=true
 }
 
+function HYPRLAND_CONFIG_tag()   { echo " ├ Hyprland Configuration"; }
+function HYPRLAND_CONFIG_label() {
+	local lines
+	lines=$(echo "$HYPRLAND_CONFIG" | wc -l)
+	echo " ├ ($lines lines)"
+}
+function HYPRLAND_CONFIG_show()  { [[ "$DESKTOP_ENVIRONMENT" == "hyprland" ]]; }
+function HYPRLAND_CONFIG_help()  { echo "EXPERIMENTAL: Edit the hyprland.conf that will be installed for the new user. Leave blank to skip creating a default config."; }
+function HYPRLAND_CONFIG_menu()  {
+	local tmpfile
+	tmpfile="$(mktemp)" || die "Could not create temporary file."
+	echo "$HYPRLAND_CONFIG" > "$tmpfile"
+
+	dialog \
+		--title "Hyprland Configuration" \
+		--editbox "$tmpfile" "${EDITTEXT_SIZE[@]}"
+	
+	local diag_exit="$?"
+	if [[ $diag_exit == 0 ]]; then
+		HYPRLAND_CONFIG="$dialog_out"
+		UNSAVED_CHANGES=true
+	fi
+	rm -f "$tmpfile"
+}
+
 function ENABLE_DISPLAY_MANAGER_tag()   { echo " ├ Display Manager"; }
 function ENABLE_DISPLAY_MANAGER_label() { echo " ├ ($ENABLE_DISPLAY_MANAGER)"; }
 function ENABLE_DISPLAY_MANAGER_show()  { [[ -n "$DESKTOP_ENVIRONMENT" ]]; }
@@ -2249,6 +2291,7 @@ ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
 
 DESKTOP_ENVIRONMENT=${DESKTOP_ENVIRONMENT@Q}
 DESKTOP_ADDITIONAL_PACKAGES=(${DESKTOP_ADDITIONAL_PACKAGES[@]@Q})
+HYPRLAND_CONFIG=${HYPRLAND_CONFIG@Q}
 ENABLE_DISPLAY_MANAGER=${ENABLE_DISPLAY_MANAGER@Q}
 ENABLE_NETWORK_MANAGER=${ENABLE_NETWORK_MANAGER@Q}
 

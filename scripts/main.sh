@@ -1504,6 +1504,26 @@ function finalize_installation() {
 		
 			einfo "User account $CREATE_USER created successfully"
 		einfo "Groups: $user_groups"
+		
+		# Apply the custom Hyprland configuration for the new user
+		if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" && -n "$HYPRLAND_CONFIG" ]]; then
+			einfo "Applying custom Hyprland configuration for user $CREATE_USER..."
+			local user_home="/home/$CREATE_USER"
+			local hypr_config_dir="$user_home/.config/hypr"
+			
+			# Create the Hyprland config directory
+			su - "$CREATE_USER" -c "mkdir -p '$hypr_config_dir'" \
+				|| ewarn "Could not create Hyprland config directory for user $CREATE_USER."
+			
+			# Copy the configuration file with proper ownership
+			install -o "$(id -u "$CREATE_USER")" -g "$(id -g "$CREATE_USER")" -m 644 \
+				<(echo "$HYPRLAND_CONFIG") "$hypr_config_dir/hyprland.conf" \
+				|| ewarn "Could not copy hyprland.conf for user $CREATE_USER."
+			
+			einfo "✅ Hyprland configuration applied successfully"
+			einfo "   Config file: $hypr_config_dir/hyprland.conf"
+			einfo "   User: $CREATE_USER"
+		fi
 else
 	einfo "No user account creation requested"
 fi
@@ -1938,6 +1958,93 @@ function install_desktop_environment() {
 	if [[ ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
 		einfo "Installing user-specified additional packages: ${DESKTOP_ADDITIONAL_PACKAGES[*]}"
 		try emerge --verbose "${DESKTOP_ADDITIONAL_PACKAGES[@]}"
+	fi
+	
+	# Install Hyprland-specific dependencies if configuration is provided
+	if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" && -n "$HYPRLAND_CONFIG" ]]; then
+		einfo "Installing Hyprland configuration dependencies..."
+		
+		# Parse the configuration to identify required packages
+		local hypr_deps=()
+		
+		# Core Hyprland ecosystem packages
+		hypr_deps+=("gui-apps/waybar" "gui-apps/wofi" "x11-terms/kitty")
+		
+		# Wallpaper and visual effects
+		if echo "$HYPRLAND_CONFIG" | grep -q "swww"; then
+			hypr_deps+=("media-gfx/swww")
+		fi
+		
+		# Screenshot and clipboard tools
+		if echo "$HYPRLAND_CONFIG" | grep -q "grim\|slurp\|wl-copy"; then
+			hypr_deps+=("media-gfx/grim" "gui-apps/slurp" "gui-apps/wl-clipboard")
+		fi
+		
+		# Audio control
+		if echo "$HYPRLAND_CONFIG" | grep -q "wpctl\|playerctl"; then
+			hypr_deps+=("media-sound/wireplumber" "media-sound/playerctl")
+		fi
+		
+		# Brightness control
+		if echo "$HYPRLAND_CONFIG" | grep -q "brightnessctl"; then
+			hypr_deps+=("sys-power/brightnessctl")
+		fi
+		
+		# Notifications
+		if echo "$HYPRLAND_CONFIG" | grep -q "mako"; then
+			hypr_deps+=("x11-misc/mako")
+		fi
+		
+		# Clipboard history
+		if echo "$HYPRLAND_CONFIG" | grep -q "cliphist"; then
+			hypr_deps+=("gui-apps/cliphist")
+		fi
+		
+		# Idle management
+		if echo "$HYPRLAND_CONFIG" | grep -q "hypridle"; then
+			hypr_deps+=("gui-apps/hypridle")
+		fi
+		
+		# Polkit agent
+		if echo "$HYPRLAND_CONFIG" | grep -q "polkit"; then
+			hypr_deps+=("kde-plasma/polkit-kde-agent")
+		fi
+		
+		# File manager
+		if echo "$HYPRLAND_CONFIG" | grep -q "thunar"; then
+			hypr_deps+=("xfce-base/thunar")
+		fi
+		
+		# Performance monitoring
+		if echo "$HYPRLAND_CONFIG" | grep -q "corectrl"; then
+			hypr_deps+=("sys-apps/corectrl")
+		fi
+		
+		# Gaming tools
+		if echo "$HYPRLAND_CONFIG" | grep -q "mangohud\|goverlay"; then
+			hypr_deps+=("games-util/mangohud" "games-util/goverlay")
+		fi
+		
+		# Remove duplicates
+		hypr_deps=($(printf "%s\n" "${hypr_deps[@]}" | sort -u))
+		
+		if [[ ${#hypr_deps[@]} -gt 0 ]]; then
+			einfo "Installing Hyprland dependencies: ${hypr_deps[*]}"
+			
+			# Install packages individually for better error handling
+			for package in "${hypr_deps[@]}"; do
+				einfo "Installing Hyprland dependency: $package"
+				if try emerge --verbose "$package"; then
+					einfo "✅ Successfully installed: $package"
+				else
+					ewarn "⚠️  Failed to install Hyprland dependency: $package"
+					ewarn "This may affect Hyprland functionality"
+					ewarn "You can try to install it manually later with: emerge --verbose $package"
+				fi
+			done
+		else
+			einfo "No additional Hyprland dependencies identified"
+		fi
 	fi
 	
 	maybe_exec 'after_install_desktop_environment'
