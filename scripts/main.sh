@@ -346,7 +346,7 @@ function install_kernel_efi() {
 		local raid_members
 		raid_members=($(mdadm --detail "$efipartdev" | sed -n 's|.*active sync[^/]*\(/dev/[^ ]*\).*|\1|p' | sort))
 
-		if [[ ${#raid_members[@]} -eq 0 ]]; then
+		if [[ -v raid_members && ${#raid_members[@]} -eq 0 ]]; then
 			die "RAID setup detected, but no valid member disks found for $efipartdev"
 		fi
 
@@ -589,7 +589,7 @@ function install_kernel_efi_stub() {
 		local raid_members
 		raid_members=($(mdadm --detail "$efipartdev" | sed -n 's|.*active sync[^/]*\(/dev/[^ ]*\).*|\1|p' | sort))
 		
-		if [[ ${#raid_members[@]} -eq 0 ]]; then
+		if [[ -v raid_members && ${#raid_members[@]} -eq 0 ]]; then
 			die "RAID setup detected, but no valid member disks found for $efipartdev"
 		fi
 		
@@ -943,7 +943,7 @@ function install_system_tools() {
 
 	
 	# Install additional packages specified by user
-	if [[ ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+	if [[ -v ADDITIONAL_PACKAGES && ${#ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
 		einfo "Installing additional packages: ${ADDITIONAL_PACKAGES[*]}"
 		try emerge --verbose "${ADDITIONAL_PACKAGES[@]}"
 	fi
@@ -1115,7 +1115,7 @@ function configure_advanced_grub() {
 	fi
 	
 	# Add custom parameters from user configuration
-	if [[ ${#GRUB_CUSTOM_PARAMS[@]} -gt 0 ]]; then
+	if [[ -v GRUB_CUSTOM_PARAMS && ${#GRUB_CUSTOM_PARAMS[@]} -gt 0 ]]; then
 		local user_params="${GRUB_CUSTOM_PARAMS[*]}"
 		custom_params="$custom_params $user_params"
 		einfo "Adding user custom parameters: $user_params"
@@ -1929,7 +1929,7 @@ function install_desktop_environment() {
 			fi
 		done
 		
-		if [[ ${#missing_packages[@]} -gt 0 ]]; then
+		if [[ -v missing_packages && ${#missing_packages[@]} -gt 0 ]]; then
 			ewarn "Some Hyprland packages are still not available: ${missing_packages[*]}"
 			ewarn "This may indicate a sync issue. Consider running: emerge --sync guru"
 		fi
@@ -1969,7 +1969,7 @@ function install_desktop_environment() {
 			fi
 		done
 		
-		if [[ ${#missing_packages[@]} -gt 0 ]]; then
+		if [[ -v missing_packages && ${#missing_packages[@]} -gt 0 ]]; then
 			ewarn "Some essential packages are not available: ${missing_packages[*]}"
 			ewarn "This may indicate a Portage sync issue or missing overlays"
 			ewarn "Consider running: emerge --sync"
@@ -1998,7 +1998,7 @@ function install_desktop_environment() {
 	fi
 	
 	# Install user-specified additional packages
-	if [[ ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+	if [[ -v DESKTOP_ADDITIONAL_PACKAGES && ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
 		einfo "Installing user-specified additional packages: ${DESKTOP_ADDITIONAL_PACKAGES[*]}"
 		try emerge --verbose "${DESKTOP_ADDITIONAL_PACKAGES[@]}"
 	fi
@@ -2071,7 +2071,7 @@ function install_desktop_environment() {
 		# Remove duplicates
 		hypr_deps=($(printf "%s\n" "${hypr_deps[@]}" | sort -u))
 		
-		if [[ ${#hypr_deps[@]} -gt 0 ]]; then
+		if [[ -v hypr_deps && ${#hypr_deps[@]} -gt 0 ]]; then
 			einfo "Installing Hyprland dependencies: ${hypr_deps[*]}"
 			
 			# Install packages individually for better error handling
@@ -2381,7 +2381,7 @@ function apply_configured_package_management() {
 	mkdir_or_die 0755 "/etc/portage/package.use"
 	
 	# Apply package USE rules
-	if [[ ${#PACKAGE_USE_RULES[@]} -gt 0 ]]; then
+	if [[ -v PACKAGE_USE_RULES && ${#PACKAGE_USE_RULES[@]} -gt 0 ]]; then
 		einfo "Applying ${#PACKAGE_USE_RULES[@]} package USE rules"
 		
 		# Create a comprehensive package.use file
@@ -2419,7 +2419,7 @@ EOF
 	mkdir_or_die 0755 "/etc/portage/package.keywords"
 	
 	# Apply package keywords
-	if [[ ${#PACKAGE_KEYWORDS[@]} -gt 0 ]]; then
+	if [[ -v PACKAGE_KEYWORDS && ${#PACKAGE_KEYWORDS[@]} -gt 0 ]]; then
 		einfo "Applying ${#PACKAGE_KEYWORDS[@]} package keywords"
 		
 		# Create a comprehensive package.keywords file
@@ -2456,7 +2456,7 @@ EOF
 
 	
 	# Apply overlays
-	if [[ ${#OVERLAY_URLS[@]} -gt 0 ]]; then
+	if [[ -v OVERLAY_URLS && ${#OVERLAY_URLS[@]} -gt 0 ]]; then
 		einfo "Setting up ${#OVERLAY_URLS[@]} portage overlays"
 		
 		# Install layman if not already installed
@@ -2579,7 +2579,7 @@ function configure_raid_uefi_boot_order() {
 	fi
 	
 	# If we found RAID members, configure UEFI boot order
-	if [[ ${#raid_members[@]} -gt 0 ]]; then
+	if [[ -v raid_members && ${#raid_members[@]} -gt 0 ]]; then
 		einfo "Configuring UEFI boot order for ${#raid_members[@]} RAID members"
 		
 		# Get current UEFI boot entries
@@ -2685,7 +2685,7 @@ function configure_raid_bios_bootloader() {
 	fi
 	
 	# If we found RAID members, install GRUB to each for redundancy
-	if [[ ${#raid_members[@]} -gt 0 ]]; then
+	if [[ -v raid_members && ${#raid_members[@]} -gt 0 ]]; then
 		einfo "Installing GRUB to ${#raid_members[@]} RAID member devices for redundancy"
 		
 		for member in "${raid_members[@]}"; do
