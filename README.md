@@ -1,10 +1,4 @@
-Of course. Based on all the recent fixes and feature enhancements, I have updated your `README.md`.
-
-The new version is more comprehensive, highlights the latest security and reliability improvements, and provides clearer instructions for the user.
-
-Here is the updated `README.md`:
-
------
+# Gentoo Easy Install
 
 ## About Gentoo Easy Install
 
@@ -16,7 +10,31 @@ This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/ge
 
 *The intuitive TUI interface makes Gentoo installation accessible while maintaining full power user control. Every option is explained with detailed help text.*
 
+![User Interaction and Error Recovery](contrib/user_interaction.png)
+
+*When things don't go as planned, the installer provides multiple recovery options. Power users can take manual control at any point, ensuring you're never locked out of your system.*
+
 It supports common disk layouts, various file systems like ext4, ZFS, and Btrfs, and additional layers such as LUKS encryption and mdraid. It robustly supports both **EFI (recommended)** and **BIOS** boot, and can be used with **systemd** or **OpenRC** as the init system.
+
+## 🚀 Latest Improvements
+
+### **Bulletproof Reliability (Latest)**
+- **Comprehensive Unbound Variable Protection**: All configuration arrays are proactively initialized, preventing installation failures due to missing variables
+- **Universal Compatibility**: Works with any configuration file (old, new, minimal, or complete)
+- **Strict Mode Support**: Compatible with `set -u` debugging for better error detection
+- **Proactive Error Prevention**: Issues are prevented before they occur, not just handled after
+
+### **Enhanced Desktop Environment Support**
+- **Automatic Portage Profile Management**: Correct profiles are automatically set for KDE Plasma, GNOME, and other DEs
+- **GURU Overlay Integration**: Automatic GURU overlay management for Hyprland installations
+- **Complete Hyprland Ecosystem**: Automatic dependency detection and installation based on user configuration
+- **Optimized Package Selection**: Essential packages are always installed, additional packages are configurable
+
+### **Advanced Bootloader Configuration**
+- **Platform-Specific Installation**: Automatic UEFI/BIOS detection and appropriate bootloader setup
+- **RAID Boot Order Management**: Intelligent UEFI boot order optimization for RAID 1 setups
+- **Secure Boot Support**: Optional shim installation and Secure Boot guidance
+- **Multiple Bootloader Options**: GRUB, systemd-boot, and EFI Stub support
 
 ## Features
 
@@ -25,6 +43,7 @@ It supports common disk layouts, various file systems like ext4, ZFS, and Btrfs,
   * **Modern Bootloader Support**: Full support for GRUB, systemd-boot, and direct EFI Stub booting, with automatic detection for UEFI and Secure Boot.
   * **Desktop Environment Support**: Automated installation for popular desktop environments like KDE Plasma, GNOME, XFCE, and more, with optimized configurations.
   * **Enhanced KDE Plasma Integration**: Automatic setup of optimal USE flags, KWallet PAM auto-unlocking, and Polkit rules for a seamless experience.
+  * **Hyprland Ecosystem Support**: Complete Wayland compositor installation with automatic GURU overlay management and dependency detection.
   * **Secure by Default**: Includes options for a hardened SSH configuration, interactive password setting (no plaintext passwords in config), and secure system defaults.
   * **Automated and Repeatable**: Create a configuration once and use it for consistent, automated installations.
   * **Robust Error Handling & Cleanup**: The installer can now automatically clean up the environment after an interruption (Ctrl+C) to prevent leaving a broken state.
@@ -35,22 +54,15 @@ The Gentoo Easy Install provides an intuitive, menu-driven interface that makes 
 
 ### 📋 Configuration Interface
 
-![Configuration TUI Interface](contrib/Configuration_TUI.png)
-
-*The main configuration interface showing the comprehensive menu system. Every option is explained with detailed help text, making it easy to configure your installation exactly as you want it.*
-
 **Key Features of the TUI:**
 - **Menu-driven navigation** with arrow keys and Enter
 - **Comprehensive help system** - press F1 or ? for detailed explanations
 - **Real-time validation** of configuration options
 - **Save/Load functionality** for configuration files
 - **Clear categorization** of related settings
+- **Desktop Environment Profiles**: Automatic Portage profile selection for optimal DE functionality
 
 ### 🛠️ Power User Control & Error Recovery
-
-![User Interaction and Error Recovery](contrib/user_interaction.png)
-
-*When things don't go as planned, the installer provides multiple recovery options. Power users can take manual control at any point, ensuring you're never locked out of your system.*
 
 **Power User Advantages:**
 - **Emergency Shell Access**: Drop into a shell at any point during installation
@@ -71,8 +83,8 @@ First, boot into a live environment of your choice. An [Arch Linux](https://www.
 # pacman -Sy git (Arch Linux)
 
 # Clone the repository
-git clone "https://github.com/firesand/Gentoo-easy-install"
-cd Gentoo-easy-install
+git clone "https://github.com/firesand/gentoo-easy-install"
+cd gentoo-easy-install
 
 # Configure the installation to your liking and save it
 ./configure
@@ -90,7 +102,7 @@ Every option is explained in detail in `gentoo.conf.example` and in the help men
 3.  **Chroot and Configure Portage**: Enters the new environment, syncs the Portage tree, and selects the fastest mirrors.
 4.  **Base System Configuration**: Sets up hostname, timezone, keymap, and locales.
 5.  **Install Core Packages**: Installs essential packages like the kernel, system tools, and drivers.
-6.  **Install Desktop Environment** (Optional): Installs and configures your chosen DE.
+6.  **Install Desktop Environment** (Optional): Installs and configures your chosen DE with correct Portage profiles.
 7.  **Make System Bootable**: Generates `fstab`, builds the `initramfs`, and installs the bootloader.
 8.  **Finalize**: Sets the root password, creates a user account, and installs optional packages.
 
@@ -102,6 +114,8 @@ The installer provides clear feedback at every step:
 - **Error Handling**: Clear error messages with suggested solutions
 - **Recovery Options**: Multiple ways to recover from any issues
 - **Manual Control**: Take over at any point if you prefer manual intervention
+- **Profile Management**: Automatic Portage profile selection for desktop environments
+- **Overlay Management**: Automatic GURU overlay setup for Hyprland installations
 
 > 💡 **Pro Tip**: Even if the automated installation encounters issues, you can always drop into a shell and fix things manually. The installer is designed to be helpful, not restrictive.
 
@@ -121,14 +135,33 @@ The installer provides intelligent bootloader configuration following Gentoo Han
   * **Platform Detection**: Automatically detects UEFI vs. BIOS systems and applies the correct installation method.
   * **Secure Boot Awareness**: Detects if Secure Boot is enabled and provides guidance and optional `shim` installation for compatibility.
   * **Advanced GRUB Configuration**: Easily configure custom kernel parameters, dual-boot detection with `os-prober`, and performance-tuning boot flags.
+  * **RAID Boot Order Optimization**: Intelligent UEFI boot order management for RAID 1 setups.
 
-### KDE Plasma Enhanced Integration
+### Desktop Environment Integration
 
+#### **KDE Plasma Enhanced Integration**
 When installing KDE Plasma, the installer provides enhanced integration features:
 
   * **Optimal USE Flags**: Automatically configures critical USE flags for NetworkManager, SDDM, and KWallet.
   * **KWallet Auto-Unlocking**: Configures PAM for automatic KWallet unlocking via SDDM login.
   * **User Authentication**: Sets up Polkit rules to allow users in the `wheel` group to authenticate for system operations.
+  * **Portage Profile Management**: Automatically sets `desktop/plasma/systemd` or `desktop/plasma` profile.
+
+#### **Hyprland Complete Ecosystem**
+For Hyprland installations, the installer provides comprehensive support:
+
+  * **GURU Overlay Management**: Automatically enables and syncs the GURU overlay for required packages.
+  * **Dependency Detection**: Automatically detects required packages based on your `hyprland.conf` content.
+  * **Complete Toolchain**: Installs waybar, wofi, kitty, swww, grim, slurp, and other essential tools.
+  * **Configuration Deployment**: Automatically deploys your custom configuration to the new user's home directory.
+  * **Portage Profile**: Sets appropriate desktop profile for optimal Wayland support.
+
+#### **Other Desktop Environments**
+All desktop environments benefit from:
+
+  * **Automatic Profile Selection**: Correct Portage profiles are set based on DE and init system choice.
+  * **Essential Package Installation**: Critical packages like `x11-drivers/xf86-input-libinput` are always installed.
+  * **Optimized Configurations**: USE flags and system settings are optimized for each DE.
 
 ## Updating the Kernel
 
@@ -137,8 +170,10 @@ By default, the system uses `sys-kernel/gentoo-kernel-bin`. To update your kerne
 1.  Emerge the new kernel package.
 2.  Run `eselect kernel set <new-kernel-version>`.
 3.  Backup your old kernel and initramfs (e.g., `mv /boot/efi/vmlinuz.efi /boot/efi/vmlinuz.efi.bak`).
-4.  Generate a new initramfs using the provided convenience script: `  /boot/efi/generate_initramfs.sh <new-kernel-version> /boot/efi/initramfs.img `.
+4.  Generate a new initramfs using the provided convenience script: `/boot/efi/generate_initramfs.sh <new-kernel-version> /boot/efi/initramfs.img`.
 5.  Copy the new kernel to the correct location (e.g., `cp /boot/vmlinuz-<version> /boot/efi/vmlinuz.efi`).
+
+> 🔧 **Note**: The convenience script now contains hardcoded module lists, ensuring it works correctly regardless of your current shell environment.
 
 ## 🛠️ Troubleshooting and Power User Recovery
 
@@ -149,6 +184,7 @@ The Gentoo Easy Install is designed with power users in mind. When things go wro
   * **Installation Fails**: The script will prompt you to drop into an emergency shell to fix issues. Most commands can be retried without restarting the entire process.
   * **`blkid` Errors After Partitioning**: Ensure all devices are unmounted before starting. Use `wipefs -a <device>` to clear old filesystem signatures if problems persist.
   * **Chrooting After a Failed Install**: If you need to fix the installed system, mount your root partition under `/mnt` and run `./install --chroot /mnt`.
+  * **Unbound Variable Errors**: All configuration arrays are now proactively initialized, preventing these errors completely.
 
 ### 🔧 Power User Recovery Methods
 
@@ -184,6 +220,24 @@ chroot /mnt            # Enter the installed system
 - **Full System Control**: Mount, modify, and fix anything manually
 - **Intelligent Recovery**: Multiple recovery paths for any situation
 - **Respects Your Expertise**: Automates the boring parts, not the important decisions
+- **Bulletproof Reliability**: Comprehensive error prevention and handling
+
+## 🏗️ Technical Architecture
+
+### **Robust Error Handling**
+- **Proactive Variable Initialization**: All configuration arrays are initialized at script start
+- **Comprehensive Error Recovery**: try blocks, cleanup traps, and emergency shells
+- **Graceful Degradation**: Script continues working even with incomplete configurations
+
+### **Security Features**
+- **No Plaintext Passwords**: Interactive or random password generation only
+- **Secure File Permissions**: Proper ownership and permissions for all created files
+- **SSH Hardening**: Configurable SSH security settings
+
+### **Performance Optimizations**
+- **Intelligent Package Selection**: Only installs what's needed
+- **Optimized USE Flags**: Critical flags set for each desktop environment
+- **Efficient Disk Operations**: Smart partitioning and filesystem handling
 
 ## Attribution
 
@@ -192,5 +246,8 @@ This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/ge
   * **Performance Optimization**: Advanced display backend testing and GPU optimization.
   * **Extended Documentation**: Detailed guides for various use cases.
   * **Additional Scripts**: Device management, storage management, and more.
+  * **Enhanced Reliability**: Comprehensive error prevention and handling.
+  * **Desktop Environment Support**: Complete ecosystem management for all major DEs.
+  * **Advanced Bootloader Configuration**: Intelligent platform detection and optimization.
 
-Original project by [oddlama](https://github.com/oddlama) - thank you for the excellent foundation\!
+Original project by [oddlama](https://github.com/oddlama) - thank you for the excellent foundation!
