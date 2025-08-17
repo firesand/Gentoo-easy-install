@@ -1874,7 +1874,8 @@ function install_desktop_environment() {
 	
 	# Dynamically find the latest stable profile matching the type
 	# This makes the script future-proof (e.g., for profile version 23.0)
-	selected_profile=$(eselect profile list | grep "${profile_type}" | grep -v 'developer\|hardened\|selinux' | sort -r | head -n 1 | awk '{print $1}')
+	# BARU (Final dan Benar)
+    selected_profile=$(eselect profile list | grep "${profile_type}" | grep -v 'developer\|hardened\|selinux' | sort -k2,2 -V -r | head -n 1 | awk '{gsub(/\[|\]/,"", $1); print $1}')
 	
 	if [[ -n "$selected_profile" ]]; then
 		einfo "Dynamically selected latest profile: $selected_profile"
