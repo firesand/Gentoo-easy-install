@@ -1892,6 +1892,49 @@ function install_desktop_environment() {
 		fi
 	fi
 	
+	# Enable GURU overlay for Hyprland (required for packages like hypridle, waybar, wofi)
+	if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" ]]; then
+		einfo "Hyprland selected. Enabling the GURU overlay for required packages..."
+		
+		# Check if GURU overlay is already enabled
+		if eselect repository list | grep -q "guru"; then
+			einfo "✅ GURU overlay is already enabled"
+		else
+			# Install the tool to manage overlays if not present
+			einfo "Installing overlay management tools..."
+			try emerge --verbose app-eselect/eselect-repository
+			
+			# Add the GURU repository
+			einfo "Adding GURU overlay..."
+			try eselect repository add guru
+			
+			# Sync the new repository to make packages available
+			einfo "Syncing GURU overlay..."
+			try emerge --sync guru
+			
+			einfo "✅ GURU overlay successfully enabled and synced"
+		fi
+		
+		# Verify that key Hyprland packages are now available
+		einfo "Verifying GURU overlay availability..."
+		local key_packages=("gui-wm/hyprland" "gui-apps/hypridle" "gui-apps/waybar" "gui-apps/wofi")
+		local missing_packages=()
+		
+		for package in "${key_packages[@]}"; do
+			if emerge --search "$package" >/dev/null 2>&1; then
+				einfo "✅ Package available: $package"
+			else
+				ewarn "⚠️  Package not found: $package"
+				missing_packages+=("$package")
+			fi
+		done
+		
+		if [[ ${#missing_packages[@]} -gt 0 ]]; then
+			ewarn "Some Hyprland packages are still not available: ${missing_packages[*]}"
+			ewarn "This may indicate a sync issue. Consider running: emerge --sync guru"
+		fi
+	fi
+	
 	# Install DE packages
 	local de_packages="${DE_PACKAGES[$DESKTOP_ENVIRONMENT]}"
 	if [[ -n "$de_packages" ]]; then

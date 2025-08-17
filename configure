@@ -1815,6 +1815,11 @@ function DESKTOP_ENVIRONMENT_menu()  {
 		DESKTOP_ENVIRONMENT="$dialog_out"
 		[[ "$DESKTOP_ENVIRONMENT" == "none" ]] && DESKTOP_ENVIRONMENT=""
 		UNSAVED_CHANGES=true
+		
+		# Inform user about GURU overlay requirement for Hyprland
+		if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" ]]; then
+			dialog --title "Hyprland Requirement" --msgbox "\nHyprland and its ecosystem packages (like hypridle, waybar, wofi) are in the GURU overlay.\n\nThe installer will automatically enable this third-party repository for you to ensure a successful installation.\n\nThis overlay contains community-maintained packages that are not in the main Gentoo repository." 12 70
+		fi
 	else
 		# Return to menu
 		true
