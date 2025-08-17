@@ -2868,7 +2868,7 @@ function ensure_gcc_compatibility() {
 		
 		# Find and select the latest GCC version
 		local latest_gcc
-		latest_gcc=$(gcc-config -l | grep -o '[0-9]*' | sort -nr | head -n1)
+		latest_gcc=$(gcc-config -l | awk '{gsub(/\[|\]/,"", $1); print $1}' | sort -nr | head -n1)
 		if [[ -n "$latest_gcc" ]]; then
 			einfo "Switching to GCC version $latest_gcc"
 			if try gcc-config "$latest_gcc"; then
