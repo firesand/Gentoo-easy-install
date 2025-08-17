@@ -302,8 +302,11 @@ ENABLE_SSHD=true
 # Leave empty for no user account
 CREATE_USER=""
 
-# Set password for the new user account (leave empty for interactive setting)
-CREATE_USER_PASSWORD=""
+# Note: Passwords are now set interactively during installation for security
+# The CREATE_USER_PASSWORD variable has been removed to prevent plaintext storage
+
+# Generate random password instead of interactive prompt (optional)
+ENABLE_RANDOM_PASSWORD=false
 
 # Groups for the new user account (comma-separated, e.g., "users,wheel,audio,video,usb")
 # Desktop environments may add additional groups automatically

@@ -1455,13 +1455,27 @@ function finalize_installation() {
 		useradd -m -G "$user_groups" -s /bin/bash "$CREATE_USER" \
 			|| ewarn "Could not create user $CREATE_USER"
 		
-		# Set user password
-		if [[ -n "$CREATE_USER_PASSWORD" ]]; then
-			einfo "Setting password for user $CREATE_USER"
-			echo "$CREATE_USER:$CREATE_USER_PASSWORD" | chpasswd \
-				|| ewarn "Could not set password for user $CREATE_USER"
+		# Set user password securely
+		if [[ "${ENABLE_RANDOM_PASSWORD:-false}" == "true" ]]; then
+			# Generate secure random password
+			einfo "Generating secure random password for user $CREATE_USER"
+			local random_password
+			random_password=$(generate_secure_password)
+			
+			# Set the password using chpasswd for non-interactive operation
+			echo "$CREATE_USER:$random_password" | chpasswd \
+				|| ewarn "Could not set random password for user $CREATE_USER"
+			
+			# Display the password to the user
+			einfo "✅ User $CREATE_USER created with random password:"
+			einfo "   Username: $CREATE_USER"
+			einfo "   Password: $random_password"
+			einfo "   ⚠️  IMPORTANT: Save this password securely - it won't be shown again!"
+			einfo "   ⚠️  You can change it later with: passwd $CREATE_USER"
 		else
+			# Set password interactively for security
 			einfo "Setting password for user $CREATE_USER interactively"
+			einfo "You will be prompted to enter and confirm the password"
 			passwd "$CREATE_USER" || ewarn "Could not set password for user $CREATE_USER"
 		fi
 		
@@ -1732,6 +1746,25 @@ function cleanup_on_exit() {
 	einfo "✅ Automatic cleanup completed due to interrupt"
 	einfo "You can now start a new installation process without rebooting"
 	exit 1
+}
+
+function generate_secure_password() {
+	# Generate a secure random password with good entropy
+	# Uses /dev/urandom for cryptographically secure randomness
+	local password_length=16
+	local password_chars="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+	
+	# Generate password using /dev/urandom for security
+	local password=""
+	local i
+	for ((i=0; i<password_length; i++)); do
+		local random_byte
+		random_byte=$(od -An -N1 -tu1 < /dev/urandom)
+		local char_index=$((random_byte % ${#password_chars}))
+		password="${password}${password_chars:$char_index:1}"
+	done
+	
+	echo "$password"
 }
 
 # Legacy functions for backward compatibility

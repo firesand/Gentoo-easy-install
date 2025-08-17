@@ -517,7 +517,7 @@ function load_default_config() {
 	ADDITIONAL_PACKAGES=()
 	ENABLE_SSHD=true
 	CREATE_USER=""
-	CREATE_USER_PASSWORD=""
+	# CREATE_USER_PASSWORD removed for security - passwords are now set interactively
 	CREATE_USER_GROUPS="users,wheel,audio,video,usb"  # Default user groups, comma-separated
 	ENABLE_BINPKG=false
 	ROOT_SSH_AUTHORIZED_KEYS=""
@@ -1009,7 +1009,7 @@ MENU_ITEMS=(
 	"--------"
 	"ENABLE_SSHD"
 	"CREATE_USER"
-	"CREATE_USER_PASSWORD"
+	"ENABLE_RANDOM_PASSWORD"
 	"CREATE_USER_GROUPS"
 	"ENABLE_BINPKG"
 	"ROOT_SSH_AUTHORIZED_KEYS"
@@ -1706,16 +1706,17 @@ function CREATE_USER_menu()  {
 	UNSAVED_CHANGES=true
 }
 
-function CREATE_USER_PASSWORD_tag()   { echo " ├ User password"; }
-function CREATE_USER_PASSWORD_label() { echo " ├ (${CREATE_USER_PASSWORD:+set})"; }
-function CREATE_USER_PASSWORD_show()  { [[ -n "$CREATE_USER" ]]; }
-function CREATE_USER_PASSWORD_help()  { echo "Set password for the new user account. If left empty, password will be set interactively during installation."; }
-function CREATE_USER_PASSWORD_menu()  {
-	dialog \
-		--title "User Password" \
-		--inputbox "Enter password for user '$CREATE_USER' (leave empty for interactive setting):" \
-		"${INPUTBOX_SIZE[@]}" "$CREATE_USER_PASSWORD"
-	CREATE_USER_PASSWORD="$dialog_out"
+	# CREATE_USER_PASSWORD functions removed for security - passwords are now set interactively
+	
+	# Secure password handling options
+	ENABLE_RANDOM_PASSWORD=false  # Generate random password instead of interactive prompt
+
+function ENABLE_RANDOM_PASSWORD_tag()   { echo " ├ Generate random password"; }
+function ENABLE_RANDOM_PASSWORD_label() { on_off_label "$ENABLE_RANDOM_PASSWORD"; }
+function ENABLE_RANDOM_PASSWORD_show()  { [[ -n "$CREATE_USER" ]]; }
+function ENABLE_RANDOM_PASSWORD_help()  { echo "Generate a secure random password instead of prompting for user input. The password will be displayed after user creation."; }
+function ENABLE_RANDOM_PASSWORD_menu()  {
+	on_off_toggle ENABLE_RANDOM_PASSWORD
 	UNSAVED_CHANGES=true
 }
 
@@ -2237,7 +2238,7 @@ MUSL=\$([[ \$STAGE3_VARIANT == *musl* ]] && echo "true" || echo "false")
 ADDITIONAL_PACKAGES=(${ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_SSHD=${ENABLE_SSHD@Q}
 CREATE_USER=${CREATE_USER@Q}
-CREATE_USER_PASSWORD=${CREATE_USER_PASSWORD@Q}
+ENABLE_RANDOM_PASSWORD=${ENABLE_RANDOM_PASSWORD@Q}
 CREATE_USER_GROUPS=${CREATE_USER_GROUPS@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
