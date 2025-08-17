@@ -63,7 +63,7 @@ declare -A DE_DEFAULT_NM=(
 
 # Additional packages that are commonly needed for DEs
 declare -A DE_ADDITIONAL_PACKAGES=(
-    [kde]="kde-apps/konsole kde-apps/dolphin kde-apps/kate"
+    [kde]="kde-apps/konsole kde-apps/dolphin kde-apps/kate kde-plasma/kwallet-pam"
     [gnome]="gnome-extra/gnome-tweaks gnome-extra/gnome-software"
     [hyprland]="gui-apps/waybar gui-apps/wofi gui-apps/kitty"
     [xfce]="xfce-extra/xfce4-goodies"
@@ -106,75 +106,5 @@ function de_requires_systemd() {
 	esac
 }
 
-# GPU Driver packages and configurations
-declare -A GPU_DRIVER_PACKAGES=(
-	[amd]="x11-drivers/xf86-video-amdgpu media-libs/mesa media-libs/mesa-vulkan-drivers"
-	[nvidia]="x11-drivers/nvidia-drivers media-libs/mesa-vulkan-drivers"
-	[nouveau]="x11-drivers/xf86-video-nouveau media-libs/mesa media-libs/mesa-vulkan-drivers"
-	[intel]="x11-drivers/xf86-video-intel media-libs/mesa media-libs/mesa-vulkan-drivers"
-	[mesa]="media-libs/mesa media-libs/mesa-vulkan-drivers"
-)
-
-# GPU Driver USE flags
-declare -A GPU_DRIVER_USE_FLAGS=(
-	[amd]="video_cards_amdgpu video_cards_radeonsi"
-	[nvidia]="video_cards_nvidia"
-	[nouveau]="video_cards_nouveau"
-	[intel]="video_cards_intel video_cards_i965"
-	[mesa]="video_cards_amdgpu video_cards_radeonsi video_cards_nouveau video_cards_intel video_cards_i965"
-)
-
-# GPU Driver kernel modules
-declare -A GPU_DRIVER_KERNEL_MODULES=(
-	[amd]="amdgpu radeon"
-	[nvidia]="nvidia"
-	[nouveau]="nouveau"
-	[intel]="i915"
-	[mesa]="amdgpu radeon nouveau i915"
-)
-
-# Function to get recommended GPU driver for DE
-function get_recommended_gpu_driver_for_de() {
-	local de="$1"
-	case "$de" in
-		hyprland|sway)
-			# Wayland DEs work best with Mesa drivers
-			echo "mesa"
-			;;
-		gnome|budgie)
-			# GNOME works well with Mesa and has good NVIDIA support
-			echo "mesa"
-			;;
-		kde)
-			# KDE works well with all drivers
-			echo "mesa"
-			;;
-		*)
-			# Default to Mesa for maximum compatibility
-			echo "mesa"
-			;;
-	esac
-}
-
-# Function to check if GPU driver supports Wayland
-function gpu_driver_supports_wayland() {
-	local driver="$1"
-	case "$driver" in
-		mesa|amd|intel) echo "true" ;;
-		nvidia|nouveau) echo "false" ;;
-		*) echo "false" ;;
-	esac
-}
-
-# Function to get GPU driver description
-function get_gpu_driver_description() {
-	local driver="$1"
-	case "$driver" in
-		amd) echo "AMD GPU drivers (Mesa-based, recommended for AMD cards)" ;;
-		nvidia) echo "NVIDIA proprietary drivers (best performance, closed source)" ;;
-		nouveau) echo "NVIDIA open-source drivers (Nouveau, good compatibility)" ;;
-		intel) echo "Intel GPU drivers (Mesa-based, recommended for Intel cards)" ;;
-		mesa) echo "Universal Mesa drivers (open-source, best compatibility)" ;;
-		*) echo "Unknown driver: $driver" ;;
-	esac
-}
+# GPU Driver functionality removed - too complex for automated installation
+# Users can manually install and configure GPU drivers after installation if needed

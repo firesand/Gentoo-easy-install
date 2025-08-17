@@ -516,6 +516,8 @@ function load_default_config() {
 
 	ADDITIONAL_PACKAGES=()
 	ENABLE_SSHD=true
+	CREATE_USER=""
+	CREATE_USER_PASSWORD=""
 	ENABLE_BINPKG=false
 	ROOT_SSH_AUTHORIZED_KEYS=""
 
@@ -525,11 +527,10 @@ function load_default_config() {
 	ENABLE_DISPLAY_MANAGER="auto"
 	ENABLE_NETWORK_MANAGER="auto"
 
-	# GPU Driver Configuration
-	GPU_DRIVER=""
-	GPU_DRIVER_ADDITIONAL_PACKAGES=()
-	ENABLE_VULKAN=true
-	ENABLE_OPENCL=false
+	# Bootloader Configuration
+	BOOTLOADER_TYPE="grub"  # Options: grub, systemd-boot, efistub
+	ENABLE_DUAL_BOOT_DETECTION=false  # Enable os-prober for multi-OS detection
+	GRUB_CUSTOM_PARAMS=()  # Custom kernel parameters for GRUB
 
 	# Performance & Testing Configuration
 	ENABLE_PERFORMANCE_OPTIMIZATION=true
@@ -998,6 +999,8 @@ MENU_ITEMS=(
 	"SELECT_MIRRORS_LARGE_FILE"
 	"--------"
 	"ENABLE_SSHD"
+	"CREATE_USER"
+	"CREATE_USER_PASSWORD"
 	"ENABLE_BINPKG"
 	"ROOT_SSH_AUTHORIZED_KEYS"
 	"--------"
@@ -1005,11 +1008,6 @@ MENU_ITEMS=(
 	"DESKTOP_ADDITIONAL_PACKAGES"
 	"ENABLE_DISPLAY_MANAGER"
 	"ENABLE_NETWORK_MANAGER"
-	"--------"
-	"GPU_DRIVER"
-	"GPU_DRIVER_ADDITIONAL_PACKAGES"
-	"ENABLE_VULKAN"
-	"ENABLE_OPENCL"
 	"--------"
 	"ENABLE_PERFORMANCE_OPTIMIZATION"
 	"ENABLE_DISPLAY_BACKEND_TESTING"
@@ -1679,6 +1677,32 @@ function ENABLE_SSHD_menu()  {
 	UNSAVED_CHANGES=true
 }
 
+function CREATE_USER_tag()   { echo "Create user account"; }
+function CREATE_USER_label() { echo "(${CREATE_USER:-none})"; }
+function CREATE_USER_show()  { return 0; }
+function CREATE_USER_help()  { echo "Create a non-root user account during installation. This is recommended for security and daily use."; }
+function CREATE_USER_menu()  {
+	dialog \
+		--title "Create User Account" \
+		--inputbox "Enter username for the new user account (leave empty for none):" \
+		"${INPUTBOX_SIZE[@]}" "$CREATE_USER"
+	CREATE_USER="$dialog_out"
+	UNSAVED_CHANGES=true
+}
+
+function CREATE_USER_PASSWORD_tag()   { echo " ├ User password"; }
+function CREATE_USER_PASSWORD_label() { echo " ├ (${CREATE_USER_PASSWORD:+set})"; }
+function CREATE_USER_PASSWORD_show()  { [[ -n "$CREATE_USER" ]]; }
+function CREATE_USER_PASSWORD_help()  { echo "Set password for the new user account. If left empty, password will be set interactively during installation."; }
+function CREATE_USER_PASSWORD_menu()  {
+	dialog \
+		--title "User Password" \
+		--inputbox "Enter password for user '$CREATE_USER' (leave empty for interactive setting):" \
+		"${INPUTBOX_SIZE[@]}" "$CREATE_USER_PASSWORD"
+	CREATE_USER_PASSWORD="$dialog_out"
+	UNSAVED_CHANGES=true
+}
+
 function ENABLE_BINPKG_tag()   { echo "Enable binary packages"; }
 function ENABLE_BINPKG_label() { on_off_label "$ENABLE_BINPKG"; }
 function ENABLE_BINPKG_show()  { return 0; }
@@ -1795,77 +1819,56 @@ function ENABLE_NETWORK_MANAGER_show()  { [[ -n "$DESKTOP_ENVIRONMENT" ]]; }
 function ENABLE_NETWORK_MANAGER_help()  { echo "Choose your network manager. 'auto' will select the best option for your chosen desktop environment."; }
 function ENABLE_NETWORK_MANAGER_menu()  {
 	if menu_radiolist_labeled \
-		"Select Network Manager" \
-		"Choose your network manager.\n\n'auto' will automatically select the best option for your chosen desktop environment.\n\n'none' disables the network manager." \
-		"$ENABLE_NETWORK_MANAGER" \
-		"auto" "Automatic (DE default)" \
-		"networkmanager" "NetworkManager (recommended)" \
-		"connman" "ConnMan (lightweight)" \
-		"none" "No network manager"
+		"Network Manager" \
+		"Choose your network management solution. NetworkManager provides GUI configuration and automatic network switching. ConnMan is a lightweight alternative." \
+		"${ENABLE_NETWORK_MANAGER:-auto}" \
+		"auto" "Auto-detect based on desktop environment" \
+		"networkmanager" "NetworkManager (recommended for desktop)" \
+		"connman" "ConnMan (lightweight alternative)" \
+		"none" "No network manager (manual configuration)"
 	then
 		ENABLE_NETWORK_MANAGER="$dialog_out"
 		UNSAVED_CHANGES=true
-	else
-		# Return to menu
-		true
 	fi
 }
 
-function GPU_DRIVER_tag()   { echo "GPU Driver"; }
-function GPU_DRIVER_label() { echo "(${GPU_DRIVER:-auto})"; }
-function GPU_DRIVER_show()  { return 0; }
-function GPU_DRIVER_help()  { echo "Choose your GPU driver. 'auto' will select the best driver for your chosen desktop environment. Mesa drivers are recommended for maximum compatibility."; }
-function GPU_DRIVER_menu()  {
+function BOOTLOADER_TYPE_tag()   { echo " ├ Bootloader Type"; }
+function BOOTLOADER_TYPE_label() { echo " ├ ($BOOTLOADER_TYPE)"; }
+function BOOTLOADER_TYPE_show()  { return 0; }
+function BOOTLOADER_TYPE_help()  { echo "Choose your bootloader. GRUB is the most flexible, systemd-boot is lightweight, and EFI Stub provides direct kernel booting."; }
+function BOOTLOADER_TYPE_menu()  {
 	if menu_radiolist_labeled \
-		"Select GPU Driver" \
-		"Choose your GPU driver.\n\n'auto' will automatically select the best driver for your chosen desktop environment.\n\nMesa drivers are recommended for maximum compatibility and Wayland support.\n\nNVIDIA proprietary drivers offer best performance but are closed source." \
-		"${GPU_DRIVER:-auto}" \
-		"auto" "Automatic (DE recommendation)" \
-		"mesa" "Universal Mesa drivers (open-source, best compatibility)" \
-		"amd" "AMD GPU drivers (Mesa-based, recommended for AMD cards)" \
-		"intel" "Intel GPU drivers (Mesa-based, recommended for Intel cards)" \
-		"nvidia" "NVIDIA proprietary drivers (best performance, closed source)" \
-		"nouveau" "NVIDIA open-source drivers (Nouveau, good compatibility)" \
-		"none" "No GPU drivers (server/CLI only)"
-	then
-		GPU_DRIVER="$dialog_out"
-		[[ "$GPU_DRIVER" == "auto" ]] && GPU_DRIVER=""
+		"Select Bootloader" \
+		"Choose your bootloader solution. Each option has different features and complexity levels.\n\nGRUB: Most flexible, supports multiple OS, customizable\nsystemd-boot: Lightweight, fast, good Secure Boot support\nEFI Stub: Minimalist, direct kernel booting, fastest boot" \
+		"${BOOTLOADER_TYPE:-grub}" \
+		"grub" "GRUB (most flexible, recommended)" \
+		"systemd-boot" "systemd-boot (lightweight, fast)" \
+		"efistub" "EFI Stub (minimalist, direct boot)"; then
+		BOOTLOADER_TYPE="$dialog_out"
 		UNSAVED_CHANGES=true
-	else
-		# Return to menu
-		true
 	fi
 }
 
-function GPU_DRIVER_ADDITIONAL_PACKAGES_tag()   { echo " ├ GPU Additional packages"; }
-function GPU_DRIVER_ADDITIONAL_PACKAGES_label() { echo " ├ (${#GPU_DRIVER_ADDITIONAL_PACKAGES[@]} packages)"; }
-function GPU_DRIVER_ADDITIONAL_PACKAGES_show()  { [[ -n "$GPU_DRIVER" ]]; }
-function GPU_DRIVER_ADDITIONAL_PACKAGES_help()  { echo "Enter additional GPU driver packages that should be installed."; }
-function GPU_DRIVER_ADDITIONAL_PACKAGES_menu()  {
+function ENABLE_DUAL_BOOT_DETECTION_tag()   { echo " ├ Dual Boot Detection"; }
+function ENABLE_DUAL_BOOT_DETECTION_label() { echo " ├ ($(on_off_label ENABLE_DUAL_BOOT_DETECTION))"; }
+function ENABLE_DUAL_BOOT_DETECTION_show()  { [[ "$BOOTLOADER_TYPE" == "grub" ]]; }
+function ENABLE_DUAL_BOOT_DETECTION_help()  { echo "Enable os-prober to detect other operating systems for dual boot support. This will automatically add Windows, Linux, and other OS entries to your GRUB menu."; }
+function ENABLE_DUAL_BOOT_DETECTION_menu()  {
+	on_off_toggle ENABLE_DUAL_BOOT_DETECTION
+	UNSAVED_CHANGES=true
+}
+
+function GRUB_CUSTOM_PARAMS_tag()   { echo " ├ Custom GRUB Parameters"; }
+function GRUB_CUSTOM_PARAMS_label() { echo " ├ ${#GRUB_CUSTOM_PARAMS[@]} parameters"; }
+function GRUB_CUSTOM_PARAMS_show()  { [[ "$BOOTLOADER_TYPE" == "grub" ]]; }
+function GRUB_CUSTOM_PARAMS_help()  { echo "Add custom kernel parameters to GRUB. These will be appended to the default kernel command line. Example: 'intel_pstate=performance quiet splash'"; }
+function GRUB_CUSTOM_PARAMS_menu()  {
 	dialog \
-		--title "GPU Driver Additional Packages" \
-		--inputbox "Enter additional GPU driver packages (portage package ATOMs) to install. Delimited by space." \
-		"${INPUTBOX_SIZE[@]}" "${GPU_DRIVER_ADDITIONAL_PACKAGES[*]}"
+		--title "Custom GRUB Parameters" \
+		--inputbox "Enter custom kernel parameters for GRUB. These will be added to the kernel command line.\n\nExample: intel_pstate=performance quiet splash\n\nSeparate multiple parameters with spaces." \
+		"${INPUTBOX_SIZE[@]}" "${GRUB_CUSTOM_PARAMS[*]}"
 	# shellcheck disable=SC2206
-	GPU_DRIVER_ADDITIONAL_PACKAGES=($dialog_out)
-	UNSAVED_CHANGES=true
-}
-
-function ENABLE_VULKAN_tag()   { echo " ├ Enable Vulkan"; }
-function ENABLE_VULKAN_label() { echo " ├ ($(on_off_label ENABLE_VULKAN))"; }
-function ENABLE_VULKAN_show()  { [[ -n "$GPU_DRIVER" ]]; }
-function ENABLE_VULKAN_help()  { echo "Enable Vulkan support for GPU drivers. Recommended for gaming and modern applications."; }
-function ENABLE_VULKAN_menu()  {
-	on_off_toggle ENABLE_VULKAN
-	UNSAVED_CHANGES=true
-}
-
-function ENABLE_OPENCL_tag()   { echo " ├ Enable OpenCL"; }
-function ENABLE_OPENCL_label() { echo " ├ ($(on_off_label ENABLE_OPENCL))"; }
-function ENABLE_OPENCL_show()  { [[ -n "$GPU_DRIVER" ]]; }
-function ENABLE_OPENCL_help()  { echo "Enable OpenCL support for GPU drivers. Useful for compute applications and some games."; }
-function ENABLE_OPENCL_menu()  {
-	on_off_toggle ENABLE_OPENCL
+	GRUB_CUSTOM_PARAMS=($dialog_out)
 	UNSAVED_CHANGES=true
 }
 
@@ -1882,7 +1885,7 @@ function ENABLE_PERFORMANCE_OPTIMIZATION_menu()  {
 
 function ENABLE_DISPLAY_BACKEND_TESTING_tag()   { echo "Display Backend Testing"; }
 function ENABLE_DISPLAY_BACKEND_TESTING_label() { echo "($(on_off_label ENABLE_DISPLAY_BACKEND_TESTING))"; }
-function ENABLE_DISPLAY_BACKEND_TESTING_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function ENABLE_DISPLAY_BACKEND_TESTING_show()  { return 0; }
 function ENABLE_DISPLAY_BACKEND_TESTING_help()  { echo "Enable display backend testing tools for optimizing GTK, SDL, and SPICE performance in VM environments."; }
 function ENABLE_DISPLAY_BACKEND_TESTING_menu()  {
 	on_off_toggle ENABLE_DISPLAY_BACKEND_TESTING
@@ -1891,7 +1894,7 @@ function ENABLE_DISPLAY_BACKEND_TESTING_menu()  {
 
 function ENABLE_GPU_BENCHMARKING_tag()   { echo "GPU Benchmarking"; }
 function ENABLE_GPU_BENCHMARKING_label() { echo "($(on_off_label ENABLE_GPU_BENCHMARKING))"; }
-function ENABLE_GPU_BENCHMARKING_show()  { [[ -n "$GPU_DRIVER" ]]; }
+function ENABLE_GPU_BENCHMARKING_show()  { return 0; }
 function ENABLE_GPU_BENCHMARKING_help()  { echo "Enable GPU benchmarking tools for performance testing and optimization in VM environments."; }
 function ENABLE_GPU_BENCHMARKING_menu()  {
 	on_off_toggle ENABLE_GPU_BENCHMARKING
@@ -2168,6 +2171,8 @@ MUSL=\$([[ \$STAGE3_VARIANT == *musl* ]] && echo "true" || echo "false")
 
 ADDITIONAL_PACKAGES=(${ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_SSHD=${ENABLE_SSHD@Q}
+CREATE_USER=${CREATE_USER@Q}
+CREATE_USER_PASSWORD=${CREATE_USER_PASSWORD@Q}
 ENABLE_BINPKG=${ENABLE_BINPKG@Q}
 ROOT_SSH_AUTHORIZED_KEYS=${ROOT_SSH_AUTHORIZED_KEYS@Q}
 
@@ -2179,23 +2184,6 @@ DESKTOP_ENVIRONMENT=${DESKTOP_ENVIRONMENT@Q}
 DESKTOP_ADDITIONAL_PACKAGES=(${DESKTOP_ADDITIONAL_PACKAGES[@]@Q})
 ENABLE_DISPLAY_MANAGER=${ENABLE_DISPLAY_MANAGER@Q}
 ENABLE_NETWORK_MANAGER=${ENABLE_NETWORK_MANAGER@Q}
-
-
-################################################
-# GPU Driver Configuration
-
-GPU_DRIVER=${GPU_DRIVER@Q}
-GPU_DRIVER_ADDITIONAL_PACKAGES=(${GPU_DRIVER_ADDITIONAL_PACKAGES[@]@Q})
-ENABLE_VULKAN=${ENABLE_VULKAN@Q}
-ENABLE_OPENCL=${ENABLE_OPENCL@Q}
-
-
-################################################
-# Performance & Testing Configuration
-
-ENABLE_PERFORMANCE_OPTIMIZATION=${ENABLE_PERFORMANCE_OPTIMIZATION@Q}
-ENABLE_DISPLAY_BACKEND_TESTING=${ENABLE_DISPLAY_BACKEND_TESTING@Q}
-ENABLE_GPU_BENCHMARKING=${ENABLE_GPU_BENCHMARKING@Q}
 
 
 ################################################

@@ -107,6 +107,58 @@ The installer supports installing popular desktop environments including:
 
 Each DE comes with appropriate display and network managers configured automatically.
 
+### KDE Plasma Enhanced Integration
+
+When installing KDE Plasma, the installer provides enhanced integration features:
+
+- **Optimal USE Flags**: Automatically configures critical USE flags for NetworkManager integration, SDDM display manager, and KWallet support
+- **NetworkManager Integration**: Seamless networking with automatic conflict resolution (no dhcpcd conflicts)
+- **KWallet Auto-Unlocking**: Configures PAM integration for automatic KWallet unlocking via SDDM
+- **User Authentication**: Sets up polkit rules allowing wheel group users to authenticate for system operations
+- **Display Manager**: Installs and configures SDDM (KDE's recommended display manager)
+- **Additional Applications**: Includes essential KDE apps (Konsole, Dolphin, Kate) and KWallet PAM support
+
+**Note**: KDE Plasma requires NetworkManager for optimal functionality. The installer automatically resolves all service conflicts and follows Gentoo best practices.
+
+### Enhanced Bootloader Configuration
+
+The installer provides intelligent bootloader configuration following Gentoo Handbook best practices:
+
+- **UEFI Platform Detection**: Automatically detects UEFI systems and sets `GRUB_PLATFORMS="efi-64"` for proper UEFI support
+- **ESP Mounting Verification**: Ensures EFI System Partition is properly mounted and accessible before bootloader installation
+- **Platform-Specific Installation**: Uses correct installation commands for UEFI vs BIOS systems
+- **Secure Boot Awareness**: Detects Secure Boot status and provides guidance for compatibility
+- **Error Handling**: Comprehensive validation and error reporting for bootloader installation
+
+**Bootloader Options**:
+- **GRUB**: Traditional bootloader with full features, supports multiple OS, customizable
+- **systemd-boot**: Lightweight, fast bootloader with excellent Secure Boot support
+- **EFI Stub**: Minimalist direct kernel booting for fastest boot times
+
+**Secure Boot Support**:
+- **Automatic Detection**: Detects Secure Boot status using `mokutil`
+- **Optional Shim Installation**: Offers to install shim packages for Secure Boot compatibility
+- **User Guidance**: Provides warnings and installation commands for Secure Boot systems
+
+**Advanced GRUB Configuration**:
+- **Custom Kernel Parameters**: Configurable kernel command line parameters
+- **Performance Tuning**: Automatic performance optimization parameters
+- **Desktop Integration**: Desktop environment specific boot parameters
+- **Graphics Mode**: UEFI graphics mode configuration
+- **Theme Support**: GRUB theme configuration
+- **Boot Memory**: Saves last booted entry for convenience
+
+**Dual Boot Detection**:
+- **os-prober Integration**: Automatic detection of other operating systems
+- **Multi-OS Support**: Windows, Linux, and other OS detection
+- **Automatic Updates**: Post-install hooks for GRUB configuration updates
+- **Manual Control**: Scripts for manual GRUB updates with OS detection
+
+**Supported Platforms**:
+- **UEFI Systems**: Full UEFI support with proper platform detection and ESP verification
+- **BIOS/Legacy Systems**: Traditional GRUB installation to disk MBR
+- **Secure Boot**: Detection and guidance for Secure Boot enabled systems
+
 ### (Optional) GPU Drivers
 
 The installer supports installing and configuring GPU drivers for optimal graphics performance:

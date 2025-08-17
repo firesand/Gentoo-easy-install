@@ -4,6 +4,9 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/protection.sh" || exit 1
 # shellcheck source=./scripts/desktop_environments.sh
 source "$GENTOO_INSTALL_REPO_DIR/scripts/desktop_environments.sh" || exit 1
 
+# IMPORTANT: NetworkManager and dhcpcd service conflicts are handled in configure_openrc()
+# Only one network management service should run at a time to avoid unpredictable results
+
 
 ################################################
 # Functions
@@ -85,6 +88,24 @@ function configure_base_system() {
 
 	# Update environment
 	env_update
+	
+	# Add essential system information
+	einfo "Setting up essential system information"
+	
+	# Set up /etc/hosts with localhost entries
+	einfo "Configuring /etc/hosts"
+	echo "127.0.0.1 localhost" >> /etc/hosts
+	echo "::1 localhost" >> /etc/hosts
+	echo "127.0.0.1 $HOSTNAME" >> /etc/hosts
+	
+	# Set secure umask for better security
+	einfo "Setting secure umask"
+	echo "umask 077" >> /etc/profile
+	
+	# Add system information to environment
+	einfo "Setting system environment variables"
+	echo "HOSTNAME=\"$HOSTNAME\"" >> /etc/env.d/99hostname
+	echo "TIMEZONE=\"$TIMEZONE\"" >> /etc/env.d/99timezone
 }
 
 function configure_portage() {
@@ -334,16 +355,168 @@ function install_kernel() {
 	# Install vanilla kernel
 	einfo "Installing vanilla kernel and related tools"
 
-	if [[ $IS_EFI == "true" ]]; then
-		install_kernel_efi
-	else
-		install_kernel_bios
-	fi
+	# Choose kernel installation method based on bootloader type
+	case "${BOOTLOADER_TYPE:-grub}" in
+		"grub")
+			if [[ $IS_EFI == "true" ]]; then
+				install_kernel_efi
+			else
+				install_kernel_bios
+			fi
+			;;
+		"systemd-boot")
+			if [[ $IS_EFI == "true" ]]; then
+				install_kernel_systemd_boot
+			else
+				die "systemd-boot requires UEFI system"
+			fi
+			;;
+		"efistub")
+			if [[ $IS_EFI == "true" ]]; then
+				install_kernel_efi_stub
+			else
+				die "EFI Stub requires UEFI system"
+			fi
+			;;
+		*)
+			ewarn "Unknown bootloader type: ${BOOTLOADER_TYPE:-grub}, defaulting to GRUB"
+			if [[ $IS_EFI == "true" ]]; then
+				install_kernel_efi
+			else
+				install_kernel_bios
+			fi
+			;;
+	esac
 
 	einfo "Installing linux-firmware"
 	echo "sys-kernel/linux-firmware linux-fw-redistributable no-source-code" >> /etc/portage/package.license \
 		|| die "Could not write to /etc/portage/package.license"
 	try emerge --verbose linux-firmware
+}
+
+function install_kernel_systemd_boot() {
+	einfo "Installing kernel for systemd-boot"
+	
+	# Install efibootmgr for UEFI boot entry management
+	try emerge --verbose sys-boot/efibootmgr
+	
+	# Copy kernel to EFI System Partition
+	local kernel_file
+	kernel_file="$(find "/boot" \( -name "vmlinuz-*" -or -name 'kernel-*' \) -printf '%f\n' | sort -V | tail -n 1)" \
+		|| die "Could not list newest kernel file"
+	
+	einfo "Found kernel: $kernel_file"
+	
+	# Create EFI directory structure if it doesn't exist
+	mkdir -p /efi/EFI/Loader || die "Could not create EFI Loader directory"
+	mkdir -p /efi/EFI/gentoo || die "Could not create EFI gentoo directory"
+	
+	# Copy kernel to EFI partition
+	try cp "/boot/$kernel_file" "/efi/EFI/gentoo/vmlinuz-$(uname -r).efi"
+	
+	# Generate initramfs
+	generate_initramfs "/efi/EFI/gentoo/initramfs-$(uname -r).img"
+	
+	# Create systemd-boot loader configuration
+	einfo "Creating systemd-boot loader configuration"
+	cat > /efi/EFI/Loader/loader.conf <<EOF
+default gentoo
+timeout 3
+editor yes
+EOF
+	
+	# Create kernel entry configuration
+	einfo "Creating systemd-boot kernel entry"
+	cat > "/efi/EFI/Loader/entries/gentoo.conf" <<EOF
+title Gentoo Linux
+linux /gentoo/vmlinuz-$(uname -r).efi
+initrd /gentoo/initramfs-$(uname -r).img
+options $(get_cmdline)
+EOF
+	
+	einfo "systemd-boot kernel installation completed"
+	einfo "Kernel: $kernel_file"
+	einfo "Initramfs: initramfs-$(uname -r).img"
+}
+
+function install_kernel_efi_stub() {
+	einfo "Installing kernel for EFI Stub booting"
+	
+	# Install efibootmgr for UEFI boot entry management
+	try emerge --verbose sys-boot/efibootmgr
+	
+	# Copy kernel to EFI System Partition
+	local kernel_file
+	kernel_file="$(find "/boot" \( -name "vmlinuz-*" -or -name 'kernel-*' \) -printf '%f\n' | sort -V | tail -n 1)" \
+		|| die "Could not list newest kernel file"
+	
+	einfo "Found kernel: $kernel_file"
+	
+	# Create EFI directory structure if it doesn't exist
+	mkdir -p /efi/EFI/Gentoo || die "Could not create EFI Gentoo directory"
+	
+	# Copy kernel to EFI partition
+	try cp "/boot/$kernel_file" "/efi/EFI/Gentoo/vmlinuz-$(uname -r).efi"
+	
+	# Generate initramfs
+	generate_initramfs "/efi/EFI/Gentoo/initramfs-$(uname -r).img"
+	
+	# Create EFI boot entry using efibootmgr
+	einfo "Creating EFI boot entry for EFI Stub"
+	local efipartdev
+	efipartdev="$(resolve_device_by_id "$DISK_ID_EFI")" \
+		|| die "Could not resolve device with id=$DISK_ID_EFI"
+	efipartdev="$(realpath "$efipartdev")" \
+		|| die "Error in realpath '$efipartdev'"
+	
+	# Get the sysfs path to EFI partition
+	local sys_efipart
+	sys_efipart="/sys/class/block/$(basename "$efipartdev")" \
+		|| die "Could not construct /sys path to EFI partition"
+	
+	# Extract partition number, handling both standard and RAID cases
+	local efipartnum
+	if [[ -e "$sys_efipart/partition" ]]; then
+		efipartnum="$(cat "$sys_efipart/partition")" \
+			|| die "Failed to find partition number for EFI partition $efipartdev"
+	else
+		efipartnum="1" # Assume partition 1 if not found, common for RAID-based EFI
+		einfo "Assuming partition 1 for RAID-based EFI on device $efipartdev"
+	fi
+	
+	# Identify the parent block device and create EFI boot entry
+	local gptdev
+	if mdadm --detail --scan "$efipartdev" | grep -qE "^ARRAY $efipartdev " && [[ "$efipartdev" =~ ^/dev/md[0-9]+$ ]]; then
+		# RAID 1 case: Create EFI boot entries for each RAID member
+		local raid_members
+		raid_members=($(mdadm --detail "$efipartdev" | sed -n 's|.*active sync[^/]*\(/dev/[^ ]*\).*|\1|p' | sort))
+		
+		if [[ ${#raid_members[@]} -eq 0 ]]; then
+			die "RAID setup detected, but no valid member disks found for $efipartdev"
+		fi
+		
+		einfo "RAID detected. RAID members: ${raid_members[*]}"
+		
+		for disk in "${raid_members[@]}"; do
+			gptdev="$disk"
+			einfo "Adding EFI boot entry for RAID member: $gptdev"
+			try efibootmgr --verbose --create --disk "$gptdev" --part "$efipartnum" --label "Gentoo EFI Stub" --loader "\\EFI\\Gentoo\\vmlinuz-$(uname -r).efi" --unicode "initrd=\\EFI\\Gentoo\\initramfs-$(uname -r).img $(get_cmdline)"
+		done
+	else
+		# Non-RAID case: Create a single EFI boot entry
+		gptdev="/dev/$(basename "$(readlink -f "$sys_efipart/..")")" \
+			|| die "Failed to find parent device for EFI partition $efipartdev"
+		if [[ ! -e "$gptdev" ]] || [[ -z "$gptdev" ]]; then
+			gptdev="$(resolve_device_by_id "${DISK_ID_PART_TO_GPT_ID[$DISK_ID_EFI]}")" \
+				|| die "Could not resolve device with id=${DISK_ID_PART_TO_GPT_ID[$DISK_ID_EFI]}"
+		fi
+		try efibootmgr --verbose --create --disk "$gptdev" --part "$efipartnum" --label "Gentoo EFI Stub" --loader "\\EFI\\Gentoo\\vmlinuz-$(uname -r).efi" --unicode "initrd=\\EFI\\Gentoo\\initramfs-$(uname -r).img $(get_cmdline)"
+	fi
+	
+	einfo "EFI Stub kernel installation completed"
+	einfo "Kernel: $kernel_file"
+	einfo "Initramfs: initramfs-$(uname -r).img"
+	einfo "EFI boot entry created: Gentoo EFI Stub"
 }
 
 function add_fstab_entry() {
@@ -415,6 +588,18 @@ function main_install_gentoo_in_chroot() {
 	einfo "Step 8: Installing system tools"
 	install_system_tools
 	
+	# NEW SECTION: Install Desktop Environment and GPU Drivers
+	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		einfo "Step 8a: Installing Desktop Environment"
+		install_desktop_environment
+		install_display_manager
+		install_network_manager
+		configure_desktop_services
+	fi
+	# GPU driver installation function removed - too complex for automated installation
+	# Users can manually install GPU drivers after installation if needed
+	# END OF NEW SECTION
+
 	# Step 9: Configure the bootloader
 	einfo "Step 9: Configuring the bootloader"
 	configure_bootloader
@@ -466,7 +651,8 @@ function install_base_system() {
 
 function configure_kernel() {
 	einfo "Configuring Linux kernel"
-	
+
+	local virtio_drivers=""
 	# Install filesystem tools BEFORE kernel/dracut installation
 	# These are required for dracut to properly handle filesystem modules
 	if [[ $USED_BTRFS == "true" ]]; then
@@ -577,6 +763,12 @@ EOF
 		modules+=("systemd-networkd")
 	fi
 	
+	# Conditionally add virtio drivers for VM compatibility
+	if systemd-detect-virt -q; then
+		einfo "Virtual machine detected, adding virtio drivers to initramfs"
+		virtio_drivers="virtio virtio_pci virtio_net virtio_blk"
+	fi
+
 	# Generate initramfs using proven dracut command
 	einfo "Using modules: ${modules[*]}"
 	try dracut \
@@ -585,7 +777,7 @@ EOF
 		--no-hostonly \
 		--ro-mnt \
 		--add "bash ${modules[*]}" \
-		--add-drivers "virtio virtio_pci virtio_net virtio_blk" \
+		${virtio_drivers:+--add-drivers "$virtio_drivers"} \
 		--force \
 		--verbose \
 		"/boot/initramfs-$kver.img"
@@ -645,26 +837,93 @@ function install_system_tools() {
 function configure_bootloader() {
 	einfo "Configuring bootloader"
 	
+	# CRITICAL: Verify EFI System Partition setup for UEFI systems
+	verify_efi_system_partition
+	
+	# Check Secure Boot status for UEFI systems
+	configure_secure_boot_support
+	
+	# Configure bootloader based on user selection
+	case "${BOOTLOADER_TYPE:-grub}" in
+		"grub")
+			configure_grub_bootloader
+			;;
+		"systemd-boot")
+			configure_systemd_boot
+			;;
+		"efistub")
+			configure_efi_stub
+			;;
+		*)
+			ewarn "Unknown bootloader type: ${BOOTLOADER_TYPE:-grub}, defaulting to GRUB"
+			configure_grub_bootloader
+			;;
+	esac
+	
+	einfo "Bootloader configuration completed successfully"
+}
+
+function configure_grub_bootloader() {
+	einfo "Installing and configuring GRUB bootloader"
+	
 	# Install and configure GRUB
 	einfo "Installing and configuring GRUB"
+	
+	# CRITICAL: Set proper GRUB platforms for UEFI systems
+	# According to Gentoo Handbook: UEFI systems need GRUB_PLATFORMS="efi-64"
+	if [[ $IS_EFI == "true" ]]; then
+		einfo "UEFI system detected - configuring GRUB for UEFI"
+		
+		# Create package.use directory if it doesn't exist
+		mkdir -p /etc/portage/package.use || die "Could not create /etc/portage/package.use directory"
+		
+		# Set GRUB_PLATFORMS for UEFI support
+		einfo "Setting GRUB_PLATFORMS=\"efi-64\" for UEFI support"
+		echo 'sys-boot/grub GRUB_PLATFORMS="efi-64"' > /etc/portage/package.use/grub-uefi \
+			|| die "Could not write GRUB UEFI USE flags to /etc/portage/package.use/grub-uefi"
+		
+		einfo "UEFI GRUB configuration prepared"
+	else
+		einfo "BIOS/Legacy system detected - configuring GRUB for BIOS"
+	fi
+	
+	# Install GRUB with proper platform support
 	try emerge --verbose sys-boot/grub
 	
 	if [[ $IS_EFI == "true" ]]; then
 		einfo "Installing EFI bootloader"
-		try emerge --verbose sys-boot/grub:2
-		grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=gentoo
+		
+		# Use the correct grub-install command for UEFI systems
+		# According to Gentoo Handbook: --efi-directory should point to EFI mount point
+		einfo "Installing GRUB to EFI System Partition"
+		grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=gentoo \
+			|| die "Failed to install GRUB EFI bootloader"
+		
+		einfo "GRUB EFI bootloader installed successfully"
 	else
 		einfo "Installing BIOS bootloader"
 		# Get the disk device from the root partition ID
 		local disk_device
 		disk_device="$(get_disk_device_from_partition "$DISK_ID_ROOT")"
 		einfo "Installing GRUB to disk: $disk_device"
-		grub-install "$disk_device"
+		grub-install "$disk_device" || die "Failed to install GRUB BIOS bootloader"
+		
+		einfo "GRUB BIOS bootloader installed successfully"
 	fi
 	
 	# Generate GRUB configuration
 	einfo "Generating GRUB configuration"
-	grub-mkconfig -o /boot/grub/grub.cfg
+	grub-mkconfig -o /boot/grub/grub.cfg || die "Failed to generate GRUB configuration"
+	
+	# Configure advanced GRUB options
+	configure_advanced_grub
+	
+	# Configure dual boot detection if enabled
+	configure_dual_boot_detection
+	
+	# Regenerate GRUB configuration with advanced options
+	einfo "Regenerating GRUB configuration with advanced options"
+	grub-mkconfig -o /boot/grub/grub.cfg || die "Failed to regenerate GRUB configuration with advanced options"
 	
 	# Verify kernel files exist
 	einfo "Verifying kernel installation"
@@ -678,6 +937,392 @@ function configure_bootloader() {
 		ewarn "No initramfs found in /boot"
 		ls -la /boot/ || true
 	fi
+	
+	einfo "GRUB bootloader configuration completed successfully"
+	if [[ $IS_EFI == "true" ]]; then
+		einfo "UEFI bootloader installed with GRUB_PLATFORMS=\"efi-64\""
+		einfo "EFI System Partition verified and accessible"
+	else
+		einfo "BIOS bootloader installed successfully"
+	fi
+}
+
+function configure_advanced_grub() {
+	[[ "$BOOTLOADER_TYPE" == "grub" ]] || return 0
+	
+	einfo "Configuring advanced GRUB options"
+	
+	# Create GRUB configuration directory
+	mkdir -p /etc/default || die "Could not create /etc/default directory"
+	
+	# Configure GRUB_DEFAULT (default boot entry)
+	einfo "Setting GRUB default boot entry"
+	echo 'GRUB_DEFAULT=0' > /etc/default/grub \
+		|| die "Could not write GRUB_DEFAULT to /etc/default/grub"
+	
+	# Configure GRUB_TIMEOUT (boot menu timeout)
+	einfo "Setting GRUB boot menu timeout"
+	echo 'GRUB_TIMEOUT=5' >> /etc/default/grub \
+		|| die "Could not write GRUB_TIMEOUT to /etc/default/grub"
+	
+	# Configure GRUB_CMDLINE_LINUX (custom kernel parameters)
+	einfo "Configuring custom kernel parameters"
+	local custom_params=""
+	
+	# Add performance tuning parameters if enabled
+	if [[ "${ENABLE_PERFORMANCE_OPTIMIZATION:-false}" == "true" ]]; then
+		custom_params="intel_pstate=performance i915.enable_rc6=0"
+		einfo "Adding performance tuning parameters: $custom_params"
+	fi
+	
+	# Add desktop environment specific parameters
+	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		case "$DESKTOP_ENVIRONMENT" in
+			kde|gnome|hyprland)
+				custom_params="$custom_params quiet splash"
+				einfo "Adding desktop environment parameters: quiet splash"
+				;;
+			xfce|cinnamon|mate|budgie)
+				custom_params="$custom_params quiet"
+				einfo "Adding desktop environment parameters: quiet"
+				;;
+		esac
+	fi
+	
+	# Add custom parameters from user configuration
+	if [[ ${#GRUB_CUSTOM_PARAMS[@]} -gt 0 ]]; then
+		local user_params="${GRUB_CUSTOM_PARAMS[*]}"
+		custom_params="$custom_params $user_params"
+		einfo "Adding user custom parameters: $user_params"
+	fi
+	
+	# Write kernel parameters to GRUB configuration
+	if [[ -n "$custom_params" ]]; then
+		echo "GRUB_CMDLINE_LINUX=\"$custom_params\"" >> /etc/default/grub \
+			|| die "Could not write GRUB_CMDLINE_LINUX to /etc/default/grub"
+	else
+		echo 'GRUB_CMDLINE_LINUX=""' >> /etc/default/grub \
+			|| die "Could not write empty GRUB_CMDLINE_LINUX to /etc/default/grub"
+	fi
+	
+	# Configure GRUB_DISABLE_OS_PROBER (for dual boot detection)
+	if [[ "${ENABLE_DUAL_BOOT_DETECTION:-false}" == "true" ]]; then
+		einfo "Enabling dual boot detection with os-prober"
+		echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub \
+			|| die "Could not write GRUB_DISABLE_OS_PROBER to /etc/default/grub"
+	else
+		einfo "Disabling dual boot detection (os-prober disabled)"
+		echo 'GRUB_DISABLE_OS_PROBER=true' >> /etc/default/grub \
+			|| die "Could not write GRUB_DISABLE_OS_PROBER to /etc/default/grub"
+	fi
+	
+	# Configure GRUB_GFXMODE (graphics mode for UEFI systems)
+	if [[ $IS_EFI == "true" ]]; then
+		einfo "Setting GRUB graphics mode for UEFI"
+		echo 'GRUB_GFXMODE=1920x1080x32,auto' >> /etc/default/grub \
+			|| die "Could not write GRUB_GFXMODE to /etc/default/grub"
+	fi
+	
+	# Configure GRUB_THEME (if available)
+	if [[ -d "/usr/share/grub/themes" ]]; then
+		einfo "Setting GRUB theme"
+		echo 'GRUB_THEME="/usr/share/grub/themes/gentoo/theme.txt"' >> /etc/default/grub \
+			|| ewarn "Could not write GRUB_THEME to /etc/default/grub"
+	fi
+	
+	# Configure GRUB_SAVEDEFAULT (save last booted entry)
+	einfo "Enabling GRUB saved default entry"
+	echo 'GRUB_SAVEDEFAULT=true' >> /etc/default/grub \
+		|| die "Could not write GRUB_SAVEDEFAULT to /etc/default/grub"
+	
+	# Configure GRUB_DEFAULT_SAVED (use saved entry as default)
+	echo 'GRUB_DEFAULT=saved' >> /etc/default/grub \
+		|| die "Could not write GRUB_DEFAULT=saved to /etc/default/grub"
+	
+	einfo "Advanced GRUB configuration completed"
+	einfo "Custom kernel parameters: $custom_params"
+	if [[ "${ENABLE_DUAL_BOOT_DETECTION:-false}" == "true" ]]; then
+		einfo "Dual boot detection enabled"
+	else
+		einfo "Dual boot detection disabled"
+	fi
+}
+
+function configure_dual_boot_detection() {
+	[[ "$BOOTLOADER_TYPE" == "grub" ]] || return 0
+	[[ "${ENABLE_DUAL_BOOT_DETECTION:-false}" == "true" ]] || return 0
+	
+	einfo "Configuring dual boot detection with os-prober"
+	
+	# Install os-prober for multi-OS detection
+	einfo "Installing os-prober for dual boot detection"
+	try emerge --verbose sys-boot/os-prober
+	
+	# Install additional tools for better OS detection
+	einfo "Installing additional tools for OS detection"
+	try emerge --verbose sys-boot/mtools sys-fs/ntfs3g
+	
+	# Create os-prober configuration
+	einfo "Creating os-prober configuration"
+	mkdir -p /etc/os-prober.d || die "Could not create /etc/os-prober.d directory"
+	
+	# Configure os-prober to detect common operating systems
+	cat > /etc/os-prober.d/gentoo.conf <<EOF
+# Gentoo os-prober configuration
+# Enable detection of common operating systems
+
+# Windows detection
+WINDOWS_BOOT_LOADER=true
+WINDOWS_EFI_LOADER=true
+
+# Linux distribution detection
+LINUX_DISTROS=true
+
+# macOS detection (if on compatible hardware)
+MACOS_DETECTION=false
+
+# Custom OS detection scripts
+CUSTOM_SCRIPTS=false
+EOF
+	
+	# Set proper permissions
+	chmod 644 /etc/os-prober.d/gentoo.conf \
+		|| ewarn "Could not set permissions on os-prober configuration"
+	
+	# Create a script to run os-prober after GRUB configuration
+	einfo "Creating os-prober integration script"
+	cat > /usr/local/bin/update-grub-with-os-prober <<'EOF'
+#!/bin/bash
+# Script to update GRUB configuration with os-prober detection
+
+set -e
+
+einfo "Updating GRUB configuration with os-prober detection"
+
+# Check if os-prober is available
+if ! command -v os-prober >/dev/null 2>&1; then
+    ewarn "os-prober not found, installing..."
+    emerge --verbose sys-boot/os-prober
+fi
+
+# Run os-prober to detect other operating systems
+einfo "Detecting other operating systems with os-prober"
+if os-prober; then
+    einfo "Other operating systems detected"
+else
+    einfo "No other operating systems detected"
+fi
+
+# Generate GRUB configuration with os-prober integration
+einfo "Generating GRUB configuration with OS detection"
+grub-mkconfig -o /boot/grub/grub.cfg
+
+einfo "GRUB configuration updated with os-prober detection"
+einfo "Reboot to see detected operating systems in boot menu"
+EOF
+	
+	# Make the script executable
+	chmod +x /usr/local/bin/update-grub-with-os-prober \
+		|| ewarn "Could not make os-prober script executable"
+	
+	# Create a post-install hook for automatic os-prober integration
+	einfo "Setting up automatic os-prober integration"
+	mkdir -p /etc/portage/postinst.d || die "Could not create /etc/portage/postinst.d directory"
+	
+	cat > /etc/portage/postinst.d/grub-os-prober-update <<'EOF'
+#!/bin/bash
+# Post-install hook to update GRUB with os-prober after kernel updates
+
+# Only run if GRUB is installed and os-prober is enabled
+if [[ -f /etc/default/grub ]] && grep -q 'GRUB_DISABLE_OS_PROBER=false' /etc/default/grub; then
+    if command -v update-grub-with-os-prober >/dev/null 2>&1; then
+        einfo "Running os-prober update after package installation"
+        update-grub-with-os-prober
+    fi
+fi
+EOF
+	
+	# Make the post-install hook executable
+	chmod +x /etc/portage/postinst.d/grub-os-prober-update \
+		|| ewarn "Could not make post-install hook executable"
+	
+	einfo "Dual boot detection configuration completed"
+	einfo "os-prober will automatically detect other operating systems"
+	einfo "Use 'update-grub-with-os-prober' to manually update GRUB configuration"
+	einfo "Post-install hooks will automatically update GRUB after kernel updates"
+}
+
+function verify_efi_system_partition() {
+	[[ $IS_EFI == "true" ]] || return 0
+	
+	einfo "Verifying EFI System Partition setup"
+	
+	# Check if EFI system partition is mounted
+	if ! mountpoint -q -- "/boot/efi"; then
+		ewarn "EFI System Partition not mounted at /boot/efi"
+		ewarn "This is required for UEFI bootloader installation"
+		
+		# Try to mount the EFI system partition
+		if [[ -n "$DISK_ID_EFI" ]]; then
+			einfo "Mounting EFI System Partition using DISK_ID_EFI: $DISK_ID_EFI"
+			mount_by_id "$DISK_ID_EFI" "/boot/efi"
+		else
+			die "EFI System Partition not mounted and DISK_ID_EFI not available"
+		fi
+	fi
+	
+	# Verify EFI System Partition is accessible and has proper structure
+	if [[ ! -d "/boot/efi/EFI" ]]; then
+		einfo "Creating EFI directory structure"
+		mkdir -p "/boot/efi/EFI" || die "Could not create EFI directory structure"
+	fi
+	
+	# Check if EFI system partition has proper permissions and is writable
+	if [[ ! -w "/boot/efi" ]]; then
+		die "EFI System Partition is not writable - check mount permissions"
+	fi
+	
+	# Verify efivars is mounted for UEFI variable access
+	if ! mountpoint -q -- "/sys/firmware/efi/efivars"; then
+		einfo "Mounting efivars for UEFI variable access"
+		mount_efivars
+	fi
+	
+	einfo "EFI System Partition verified and ready for bootloader installation"
+}
+
+function configure_systemd_boot() {
+	[[ $IS_EFI == "true" ]] || die "systemd-boot requires UEFI system"
+	[[ "$BOOTLOADER_TYPE" == "systemd-boot" ]] || return 0
+	
+	einfo "Installing and configuring systemd-boot"
+	
+	# Install systemd-boot with proper USE flags
+	einfo "Installing systemd-boot packages"
+	
+	# Create package.use directory if it doesn't exist
+	mkdir -p /etc/portage/package.use || die "Could not create /etc/portage/package.use directory"
+	
+	# Set systemd-boot USE flags
+	einfo "Setting systemd-boot USE flags"
+	if [[ "$SYSTEMD" == "true" ]]; then
+		echo 'sys-apps/systemd boot' > /etc/portage/package.use/systemd-boot \
+			|| die "Could not write systemd-boot USE flags"
+	else
+		echo 'sys-apps/systemd-utils boot' > /etc/portage/package.use/systemd-boot \
+			|| die "Could not write systemd-boot USE flags"
+	fi
+	
+	# Install systemd-boot
+	if [[ "$SYSTEMD" == "true" ]]; then
+		try emerge --verbose sys-apps/systemd
+	else
+		try emerge --verbose sys-apps/systemd-utils
+	fi
+	
+	# Install systemd-boot to EFI System Partition
+	einfo "Installing systemd-boot to EFI System Partition"
+	bootctl install || die "Failed to install systemd-boot"
+	
+	# Verify installation
+	einfo "Verifying systemd-boot installation"
+	bootctl list || ewarn "Could not list boot entries"
+	
+	einfo "systemd-boot installation completed successfully"
+	einfo "Note: Kernel installation will automatically update boot entries"
+}
+
+function configure_efi_stub() {
+	[[ $IS_EFI == "true" ]] || die "EFI Stub requires UEFI system"
+	[[ "$BOOTLOADER_TYPE" == "efistub" ]] || return 0
+	
+	einfo "Installing and configuring EFI Stub booting"
+	
+	# Install efibootmgr for UEFI boot entry management
+	einfo "Installing efibootmgr for UEFI boot entry management"
+	try emerge --verbose sys-boot/efibootmgr
+	
+	# Configure installkernel for EFI Stub support
+	einfo "Configuring installkernel for EFI Stub support"
+	
+	# Create package.use directory if it doesn't exist
+	mkdir -p /etc/portage/package.use || die "Could not create /etc/portage/package.use directory"
+	
+	# Set efistub USE flag for installkernel
+	echo 'sys-kernel/installkernel efistub' > /etc/portage/package.use/installkernel-efistub \
+		|| die "Could not write installkernel efistub USE flags"
+	
+	# Reinstall installkernel with efistub support
+	einfo "Reinstalling installkernel with EFI Stub support"
+	try emerge --verbose sys-kernel/installkernel
+	
+	# Create EFI directory structure
+	einfo "Creating EFI directory structure"
+	mkdir -p /efi/EFI/Gentoo || die "Could not create EFI directory structure"
+	
+	einfo "EFI Stub configuration completed successfully"
+	einfo "Note: Kernel installation will automatically create EFI boot entries"
+}
+
+function configure_secure_boot_support() {
+	[[ $IS_EFI == "true" ]] || return 0
+	
+	einfo "Checking Secure Boot support"
+	
+	# Check if secure boot is enabled in UEFI
+	if [[ -d "/sys/firmware/efi/efivars" ]]; then
+		# Try to read secure boot status (this may fail if not accessible)
+		local secure_boot_status="unknown"
+		if command -v mokutil >/dev/null 2>&1; then
+			if mokutil --sb-state 2>/dev/null | grep -q "SecureBoot enabled"; then
+				secure_boot_status="enabled"
+			elif mokutil --sb-state 2>/dev/null | grep -q "SecureBoot disabled"; then
+				secure_boot_status="disabled"
+			fi
+		fi
+		
+		einfo "Secure Boot status: $secure_boot_status"
+		
+		# If secure boot is enabled, offer to install shim for compatibility
+		if [[ "$secure_boot_status" == "enabled" ]]; then
+			ewarn "Secure Boot is enabled - this may require additional setup for GRUB to work"
+			ewarn "Consider installing shim for better Secure Boot compatibility"
+			
+			# Offer optional shim installation
+			if ask "Install shim packages for Secure Boot compatibility?"; then
+				einfo "Installing shim packages for Secure Boot support"
+				
+				# Install required packages for Secure Boot
+				try emerge --verbose sys-boot/shim sys-boot/mokutil sys-boot/efibootmgr
+				
+				# Create EFI directory structure for shim
+				mkdir -p /efi/EFI/Gentoo || die "Could not create EFI directory structure"
+				
+				# Copy shim files to EFI partition
+				einfo "Installing shim files to EFI System Partition"
+				cp /usr/share/shim/BOOTX64.EFI /efi/EFI/Gentoo/shimx64.efi \
+					|| ewarn "Could not copy shim BOOTX64.EFI"
+				cp /usr/share/shim/mmx64.efi /efi/EFI/Gentoo/mmx64.efi \
+					|| ewarn "Could not copy shim mmx64.efi"
+				
+				# Copy signed GRUB EFI file
+				if [[ -f /usr/lib/grub/grub-x86_64.efi.signed ]]; then
+					cp /usr/lib/grub/grub-x86_64.efi.signed /efi/EFI/Gentoo/grubx64.efi \
+						|| ewarn "Could not copy signed GRUB EFI file"
+				else
+					ewarn "Signed GRUB EFI file not found - Secure Boot may not work"
+				fi
+				
+				einfo "Shim installation completed"
+				einfo "Note: You may need to manually configure UEFI boot entries"
+				einfo "See Gentoo Handbook for detailed Secure Boot configuration"
+			else
+				einfo "Shim installation skipped - GRUB may not work with Secure Boot enabled"
+			fi
+		fi
+	else
+		ewarn "Could not determine Secure Boot status - efivars not accessible"
+	fi
 }
 
 function finalize_installation() {
@@ -686,6 +1331,47 @@ function finalize_installation() {
 	# Set root password
 	einfo "Setting root password"
 	passwd root || ewarn "Could not set root password - user will need to set it manually"
+	
+	# Create user account if specified
+	if [[ -n "$CREATE_USER" ]]; then
+		einfo "Creating user account: $CREATE_USER"
+		
+		# Create user with appropriate groups
+		local user_groups="users,wheel,audio,video,usb"
+		if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+			# Add desktop-specific groups
+			case "$DESKTOP_ENVIRONMENT" in
+				kde|gnome|hyprland|xfce|cinnamon|mate|budgie|i3|sway|openbox|fluxbox)
+					user_groups="$user_groups,plugdev,input"
+					;;
+			esac
+		fi
+		
+		einfo "Creating user with groups: $user_groups"
+		useradd -m -G "$user_groups" -s /bin/bash "$CREATE_USER" \
+			|| ewarn "Could not create user $CREATE_USER"
+		
+		# Set user password
+		if [[ -n "$CREATE_USER_PASSWORD" ]]; then
+			einfo "Setting password for user $CREATE_USER"
+			echo "$CREATE_USER:$CREATE_USER_PASSWORD" | chpasswd \
+				|| ewarn "Could not set password for user $CREATE_USER"
+		else
+			einfo "Setting password for user $CREATE_USER interactively"
+			passwd "$CREATE_USER" || ewarn "Could not set password for user $CREATE_USER"
+		fi
+		
+			einfo "User account $CREATE_USER created successfully"
+		einfo "Groups: $user_groups"
+else
+	einfo "No user account creation requested"
+fi
+
+# Set secure file permissions for better security
+einfo "Setting secure file permissions"
+chmod 600 /etc/shadow || ewarn "Could not set secure permissions on /etc/shadow"
+chmod 644 /etc/passwd || ewarn "Could not set secure permissions on /etc/passwd"
+chmod 644 /etc/group || ewarn "Could not set secure permissions on /etc/group"
 	
 	# Clean up temporary files
 	einfo "Cleaning up temporary files"
@@ -729,10 +1415,25 @@ function configure_systemd() {
 function configure_openrc() {
 	einfo "Configuring OpenRC services"
 	
-	# Install and enable dhcpcd
-	einfo "Installing dhcpcd"
-	try emerge --verbose net-misc/dhcpcd
-	enable_service dhcpcd
+	# CRITICAL: Prevent NetworkManager and dhcpcd service conflicts
+	# According to Gentoo Handbook: "Only one network management service should run at a time"
+	local will_use_networkmanager="false"
+	if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
+		local nm="${ENABLE_NETWORK_MANAGER:-auto}"
+		[[ "$nm" == "auto" ]] && nm="$(get_default_nm_for_de "$DESKTOP_ENVIRONMENT")"
+		[[ "$nm" != "none" ]] && will_use_networkmanager="true"
+	fi
+	
+	# Only install and enable dhcpcd if NetworkManager is NOT being used
+	if [[ "$will_use_networkmanager" == "false" ]]; then
+		einfo "Installing dhcpcd service (NetworkManager not enabled)"
+		try emerge --verbose net-misc/dhcpcd
+		enable_service dhcpcd
+	else
+		einfo "Skipping dhcpcd service (NetworkManager will handle networking)"
+		einfo "Note: NetworkManager and dhcpcd should not run simultaneously"
+		einfo "This prevents networking conflicts and follows Gentoo Handbook recommendations"
+	fi
 	
 	# Enable SSH if requested
 	if [[ $ENABLE_SSHD == "true" ]]; then
@@ -788,6 +1489,9 @@ function install_desktop_environment() {
 	if [[ -n "$de_packages" ]]; then
 		einfo "Installing $DESKTOP_ENVIRONMENT packages: $de_packages"
 		try emerge --verbose $de_packages
+		
+		# Configure KDE-specific USE flags if installing KDE
+		configure_kde_use_flags
 	else
 		ewarn "No package definition found for $DESKTOP_ENVIRONMENT"
 		return 1
@@ -807,6 +1511,94 @@ function install_desktop_environment() {
 	fi
 	
 	maybe_exec 'after_install_desktop_environment'
+}
+
+function configure_kde_use_flags() {
+	[[ "$DESKTOP_ENVIRONMENT" == "kde" ]] || return 0
+	
+	einfo "Configuring KDE USE flags for optimal integration"
+	
+	# Create package.use directory if it doesn't exist
+	mkdir -p /etc/portage/package.use || die "Could not create /etc/portage/package.use directory"
+	
+	# Set critical KDE USE flags for optimal functionality
+	# These flags ensure NetworkManager integration, SDDM display manager, and KWallet support
+	local kde_use_flags="networkmanager sddm display-manager elogind kwallet"
+	
+	einfo "Setting KDE Plasma USE flags: $kde_use_flags"
+	echo "kde-plasma/plasma-meta $kde_use_flags" > /etc/portage/package.use/kde-plasma \
+		|| die "Could not write KDE Plasma USE flags to /etc/portage/package.use/kde-plasma"
+	
+	# Also set NetworkManager USE flag for KDE applications if they're installed
+	if [[ -n "${DE_ADDITIONAL_PACKAGES[kde]}" ]] || [[ ${#DESKTOP_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
+		einfo "Setting NetworkManager USE flag for KDE applications"
+		echo "kde-apps/kde-apps-meta networkmanager" >> /etc/portage/package.use/kde-apps \
+			|| ewarn "Could not append KDE apps USE flags"
+	fi
+	
+	einfo "KDE USE flags configured successfully"
+	einfo "Note: These flags ensure optimal NetworkManager integration and KDE functionality"
+}
+
+function configure_kde_system() {
+	[[ "$DESKTOP_ENVIRONMENT" == "kde" ]] || return 0
+	
+	einfo "Configuring KDE-specific system settings"
+	
+	# Ensure proper PAM configuration for KWallet auto-unlocking
+	if [[ -f /etc/pam.d/sddm ]]; then
+		einfo "Configuring KWallet PAM integration for SDDM"
+		
+		# Check if KWallet PAM lines are already present
+		if ! grep -q "pam_kwallet5.so" /etc/pam.d/sddm; then
+			einfo "Adding KWallet PAM configuration to SDDM"
+			
+			# Add KWallet PAM lines for auto-unlocking
+			# This allows KWallet to unlock automatically when user logs in
+			cat >> /etc/pam.d/sddm << 'EOF'
+
+# KWallet PAM integration for auto-unlocking
+auth           optional        pam_kwallet5.so
+session        optional        pam_kwallet5.so auto_start
+EOF
+			
+			einfo "KWallet PAM configuration added to SDDM"
+		else
+			einfo "KWallet PAM configuration already present in SDDM"
+		fi
+	else
+		ewarn "SDDM PAM configuration not found - KWallet auto-unlocking may not work"
+	fi
+	
+	# Configure polkit for non-root user authentication in KDE dialogs
+	einfo "Configuring polkit for KDE dialogs"
+	
+	# Create polkit rules directory if it doesn't exist
+	mkdir -p /etc/polkit-1/rules.d || die "Could not create /etc/polkit-1/rules.d directory"
+	
+	# Set up wheel group as administrators for KDE dialogs
+	# This allows users in the wheel group to authenticate for system operations
+	if [[ ! -f /etc/polkit-1/rules.d/49-wheel.rules ]]; then
+		einfo "Creating polkit rule for wheel group administrators"
+		
+		cat > /etc/polkit-1/rules.d/49-wheel.rules << 'EOF'
+polkit.addAdminRule(function(action, subject) {
+    return ["unix-group:wheel"];
+});
+EOF
+		
+		einfo "Polkit rule created: wheel group users can authenticate for system operations"
+	else
+		einfo "Polkit rule for wheel group already exists"
+	fi
+	
+	# Set proper permissions for polkit rules
+	chmod 644 /etc/polkit-1/rules.d/49-wheel.rules \
+		|| ewarn "Could not set proper permissions on polkit rules"
+	
+	einfo "KDE system configuration completed successfully"
+	einfo "Users in wheel group can now authenticate for KDE system dialogs"
+	einfo "KWallet will auto-unlock when logging in via SDDM"
 }
 
 function install_display_manager() {
@@ -835,6 +1627,10 @@ function install_network_manager() {
 	[[ "$nm" == "none" ]] && return 0
 	
 	einfo "Installing network manager: $nm"
+	
+	# Important: NetworkManager will handle all networking, including DHCP
+	# The dhcpcd service will NOT be enabled to avoid conflicts
+	einfo "Note: NetworkManager will handle DHCP and network configuration"
 	
 	local nm_package="${NM_PACKAGES[$nm]}"
 	if [[ -n "$nm_package" ]]; then
@@ -870,160 +1666,14 @@ function configure_desktop_services() {
 		fi
 	fi
 	
+	# Configure KDE-specific system settings if installing KDE
+	configure_kde_system
+	
 	maybe_exec 'after_configure_desktop_services'
 }
 
-function install_gpu_drivers() {
-	# Auto-detect GPU driver if not specified
-	if [[ -z "$GPU_DRIVER" ]]; then
-		if [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
-			GPU_DRIVER="$(get_recommended_gpu_driver_for_de "$DESKTOP_ENVIRONMENT")"
-			einfo "Auto-detected GPU driver: $GPU_DRIVER (recommended for $DESKTOP_ENVIRONMENT)"
-		else
-			return 0
-		fi
-	fi
-	
-	maybe_exec 'before_install_gpu_drivers'
-	
-	einfo "Installing GPU drivers: $GPU_DRIVER"
-	
-	# Check if DE requires Wayland but GPU driver doesn't support it
-	if [[ "$(is_wayland_de "$DESKTOP_ENVIRONMENT")" == "true" && "$(gpu_driver_supports_wayland "$GPU_DRIVER")" == "false" ]]; then
-		ewarn "Warning: $DESKTOP_ENVIRONMENT is a Wayland DE, but $GPU_DRIVER doesn't support Wayland well"
-		ewarn "You may experience issues or fallback to X11"
-		if ! ask "Continue with $GPU_DRIVER installation?"; then
-			return 1
-		fi
-	fi
-	
-	# Install GPU driver packages
-	local gpu_packages="${GPU_DRIVER_PACKAGES[$GPU_DRIVER]}"
-	if [[ -n "$gpu_packages" ]]; then
-		einfo "Installing $GPU_DRIVER packages: $gpu_packages"
-		try emerge --verbose $gpu_packages
-	else
-		ewarn "No package definition found for GPU driver: $GPU_DRIVER"
-		return 1
-	fi
-	
-	# Install additional GPU driver packages
-	if [[ ${#GPU_DRIVER_ADDITIONAL_PACKAGES[@]} -gt 0 ]]; then
-		einfo "Installing additional GPU driver packages: ${GPU_DRIVER_ADDITIONAL_PACKAGES[*]}"
-		try emerge --verbose "${GPU_DRIVER_ADDITIONAL_PACKAGES[@]}"
-	fi
-	
-	# Install Vulkan support if enabled
-	if [[ "$ENABLE_VULKAN" == "true" ]]; then
-		einfo "Installing Vulkan support for $GPU_DRIVER"
-		case "$GPU_DRIVER" in
-			amd|mesa)
-				try emerge --verbose media-libs/mesa-vulkan-drivers
-				;;
-			nvidia)
-				try emerge --verbose media-libs/mesa-vulkan-drivers
-				;;
-			intel)
-				try emerge --verbose media-libs/mesa-vulkan-drivers
-				;;
-		esac
-	fi
-	
-	# Install OpenCL support if enabled
-	if [[ "$ENABLE_OPENCL" == "true" ]]; then
-		einfo "Installing OpenCL support for $GPU_DRIVER"
-		case "$GPU_DRIVER" in
-			amd|mesa)
-				try emerge --verbose media-libs/mesa-opencl
-				;;
-			nvidia)
-				try emerge --verbose media-libs/opencl-icd-loader
-				;;
-			intel)
-				try emerge --verbose media-libs/mesa-opencl
-				;;
-		esac
-	fi
-	
-	maybe_exec 'after_install_gpu_drivers'
-}
-
-function configure_gpu_drivers() {
-	[[ -z "$GPU_DRIVER" ]] && return 0
-	
-	maybe_exec 'before_configure_gpu_drivers'
-	
-	einfo "Configuring GPU drivers: $GPU_DRIVER"
-	
-	# Configure USE flags for GPU drivers
-	local use_flags="${GPU_DRIVER_USE_FLAGS[$GPU_DRIVER]}"
-	if [[ -n "$use_flags" ]]; then
-		einfo "Setting USE flags for $GPU_DRIVER: $use_flags"
-		echo "USE=\"\${USE} $use_flags\"" >> /etc/portage/make.conf
-	fi
-	
-	# Configure kernel modules for GPU drivers
-	local kernel_modules="${GPU_DRIVER_KERNEL_MODULES[$GPU_DRIVER]}"
-	if [[ -n "$kernel_modules" ]]; then
-		einfo "Configuring kernel modules for $GPU_DRIVER: $kernel_modules"
-		echo "MODULES_LOAD=\"\${MODULES_LOAD} $kernel_modules\"" >> /etc/conf.d/modules
-	fi
-	
-	# NVIDIA-specific configuration
-	if [[ "$GPU_DRIVER" == "nvidia" ]]; then
-		einfo "Configuring NVIDIA drivers"
-		
-		# Create NVIDIA configuration directory
-		mkdir_or_die 0755 "/etc/modprobe.d"
-		
-		# Configure NVIDIA kernel module options
-		cat > /etc/modprobe.d/nvidia.conf <<EOF
-# NVIDIA driver configuration
-options nvidia NVreg_PreserveVideoMemoryAllocations=1
-options nvidia NVreg_UsePageAttributeTable=1
-EOF
-		
-		# Enable NVIDIA persistence daemon
-		if [[ $SYSTEMD == "true" ]]; then
-			enable_service nvidia-persistenced
-		else
-			# For OpenRC, add to default runlevel
-			rc-update add nvidia-persistenced default
-		fi
-	fi
-	
-	# AMD-specific configuration
-	if [[ "$GPU_DRIVER" == "amd" || "$GPU_DRIVER" == "mesa" ]]; then
-		einfo "Configuring AMD drivers"
-		
-		# Create AMD configuration directory
-		mkdir_or_die 0755 "/etc/modprobe.d"
-		
-		# Configure AMD kernel module options
-		cat > /etc/modprobe.d/amdgpu.conf <<EOF
-# AMD GPU driver configuration
-options amdgpu gpu_recovery=1
-options amdgpu ppfeaturemask=0xffffffff
-EOF
-	fi
-	
-	# Intel-specific configuration
-	if [[ "$GPU_DRIVER" == "intel" || "$GPU_DRIVER" == "mesa" ]]; then
-		einfo "Configuring Intel drivers"
-		
-		# Create Intel configuration directory
-		mkdir_or_die 0755 "/etc/modprobe.d"
-		
-		# Configure Intel kernel module options
-		cat > /etc/modprobe.d/i915.conf <<EOF
-# Intel GPU driver configuration
-options i915 enable_guc=2
-options i915 enable_fbc=1
-EOF
-	fi
-	
-	maybe_exec 'after_configure_gpu_drivers'
-}
+# GPU driver configuration function removed - too complex for automated installation
+# Users can manually configure GPU drivers after installation if needed
 
 function main_chroot() {
 	# Skip if already mounted
@@ -1046,6 +1696,12 @@ function install_performance_optimization() {
 	
 	# Install system monitoring tools
 	try emerge --verbose sys-process/btop
+	try emerge --verbose net-misc/openssh
+	try emerge --verbose app-eselect/eselect-repository
+	# Note: dhcpcd is installed as a tool, not as a service
+	# This avoids conflicts with NetworkManager
+	try emerge --verbose net-misc/dhcpcd
+	try emerge --verbose net-wireless/iw
 	
 	# Configure performance settings
 	einfo "Configuring performance optimization"
@@ -1078,7 +1734,6 @@ function install_performance_optimization() {
 
 function install_display_backend_testing() {
 	[[ "$ENABLE_DISPLAY_BACKEND_TESTING" != "true" ]] && return 0
-	[[ -z "$GPU_DRIVER" ]] && return 0
 	
 	maybe_exec 'before_install_display_backend_testing'
 	
@@ -1087,16 +1742,10 @@ function install_display_backend_testing() {
 	# Install display backend testing dependencies
 	try emerge --verbose x11-apps/xdpyinfo
 	try emerge --verbose x11-apps/xrandr
-	try emerge --verbose media-libs/mesa-demos
-	
-	# Install performance testing tools
-	try emerge --verbose media-libs/mesa-utils
-	try emerge --verbose x11-apps/glxgears
 	
 	# Install Wayland testing tools if using Wayland DE
 	if [[ "$(is_wayland_de "$DESKTOP_ENVIRONMENT")" == "true" ]]; then
 		try emerge --verbose gui-apps/wl-clipboard
-		try emerge --verbose x11-misc/wtype
 	fi
 	
 	maybe_exec 'after_install_display_backend_testing'
@@ -1104,27 +1753,16 @@ function install_display_backend_testing() {
 
 function install_gpu_benchmarking() {
 	[[ "$ENABLE_GPU_BENCHMARKING" != "true" ]] && return 0
-	[[ -z "$GPU_DRIVER" ]] && return 0
 	
 	maybe_exec 'before_install_gpu_benchmarking'
 	
 	einfo "Installing GPU benchmarking tools"
 	
-	# Install GPU benchmarking tools
-	try emerge --verbose app-benchmarks/glmark2
-	try emerge --verbose app-benchmarks/glxgears
-	try emerge --verbose app-benchmarks/glxspheres
-	
 	# Install OpenGL utilities
-	try emerge --verbose media-libs/mesa-progs
-	try emerge --verbose x11-apps/glxinfo
+	try emerge --verbose x11-apps/mesa-progs
 	
 	maybe_exec 'after_install_gpu_benchmarking'
 }
-
-
-
-
 
 function apply_configured_package_management() {
 	einfo "Applying configured package management settings"

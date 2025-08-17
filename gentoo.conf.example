@@ -298,6 +298,13 @@ ADDITIONAL_PACKAGES=()
 # only allows the use of ed25519 keys, and requires pubkey authentication)
 ENABLE_SSHD=true
 
+# Create a non-root user account during installation (recommended for security)
+# Leave empty for no user account
+CREATE_USER=""
+
+# Set password for the new user account (leave empty for interactive setting)
+CREATE_USER_PASSWORD=""
+
 # Enable binary portage packages where available
 ENABLE_BINPKG=false
 
