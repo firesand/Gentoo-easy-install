@@ -947,7 +947,7 @@ function configure_grub_bootloader() {
 }
 
 function configure_advanced_grub() {
-	[[ "$BOOTLOADER_TYPE" == "grub" ]] || return 0
+	[[ "${BOOTLOADER_TYPE:-grub}" == "grub" ]] || return 0
 	
 	einfo "Configuring advanced GRUB options"
 	
@@ -1048,7 +1048,7 @@ function configure_advanced_grub() {
 }
 
 function configure_dual_boot_detection() {
-	[[ "$BOOTLOADER_TYPE" == "grub" ]] || return 0
+	[[ "${BOOTLOADER_TYPE:-grub}" == "grub" ]] || return 0
 	[[ "${ENABLE_DUAL_BOOT_DETECTION:-false}" == "true" ]] || return 0
 	
 	einfo "Configuring dual boot detection with os-prober"
@@ -1192,7 +1192,7 @@ function verify_efi_system_partition() {
 
 function configure_systemd_boot() {
 	[[ $IS_EFI == "true" ]] || die "systemd-boot requires UEFI system"
-	[[ "$BOOTLOADER_TYPE" == "systemd-boot" ]] || return 0
+	[[ "${BOOTLOADER_TYPE:-grub}" == "systemd-boot" ]] || return 0
 	
 	einfo "Installing and configuring systemd-boot"
 	
@@ -1204,7 +1204,7 @@ function configure_systemd_boot() {
 	
 	# Set systemd-boot USE flags
 	einfo "Setting systemd-boot USE flags"
-	if [[ "$SYSTEMD" == "true" ]]; then
+	if [[ "${SYSTEMD:-false}" == "true" ]]; then
 		echo 'sys-apps/systemd boot' > /etc/portage/package.use/systemd-boot \
 			|| die "Could not write systemd-boot USE flags"
 	else
@@ -1213,7 +1213,7 @@ function configure_systemd_boot() {
 	fi
 	
 	# Install systemd-boot
-	if [[ "$SYSTEMD" == "true" ]]; then
+	if [[ "${SYSTEMD:-false}" == "true" ]]; then
 		try emerge --verbose sys-apps/systemd
 	else
 		try emerge --verbose sys-apps/systemd-utils
@@ -1233,7 +1233,7 @@ function configure_systemd_boot() {
 
 function configure_efi_stub() {
 	[[ $IS_EFI == "true" ]] || die "EFI Stub requires UEFI system"
-	[[ "$BOOTLOADER_TYPE" == "efistub" ]] || return 0
+	[[ "${BOOTLOADER_TYPE:-grub}" == "efistub" ]] || return 0
 	
 	einfo "Installing and configuring EFI Stub booting"
 	

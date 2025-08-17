@@ -1851,7 +1851,7 @@ function BOOTLOADER_TYPE_menu()  {
 
 function ENABLE_DUAL_BOOT_DETECTION_tag()   { echo " ├ Dual Boot Detection"; }
 function ENABLE_DUAL_BOOT_DETECTION_label() { echo " ├ ($(on_off_label ENABLE_DUAL_BOOT_DETECTION))"; }
-function ENABLE_DUAL_BOOT_DETECTION_show()  { [[ "$BOOTLOADER_TYPE" == "grub" ]]; }
+function ENABLE_DUAL_BOOT_DETECTION_show()  { [[ "${BOOTLOADER_TYPE:-grub}" == "grub" ]]; }
 function ENABLE_DUAL_BOOT_DETECTION_help()  { echo "Enable os-prober to detect other operating systems for dual boot support. This will automatically add Windows, Linux, and other OS entries to your GRUB menu."; }
 function ENABLE_DUAL_BOOT_DETECTION_menu()  {
 	on_off_toggle ENABLE_DUAL_BOOT_DETECTION
@@ -1860,7 +1860,7 @@ function ENABLE_DUAL_BOOT_DETECTION_menu()  {
 
 function GRUB_CUSTOM_PARAMS_tag()   { echo " ├ Custom GRUB Parameters"; }
 function GRUB_CUSTOM_PARAMS_label() { echo " ├ ${#GRUB_CUSTOM_PARAMS[@]} parameters"; }
-function GRUB_CUSTOM_PARAMS_show()  { [[ "$BOOTLOADER_TYPE" == "grub" ]]; }
+function GRUB_CUSTOM_PARAMS_show()  { [[ "${BOOTLOADER_TYPE:-grub}" == "grub" ]]; }
 function GRUB_CUSTOM_PARAMS_help()  { echo "Add custom kernel parameters to GRUB. These will be appended to the default kernel command line. Example: 'intel_pstate=performance quiet splash'"; }
 function GRUB_CUSTOM_PARAMS_menu()  {
 	dialog \
