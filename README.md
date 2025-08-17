@@ -10,6 +10,12 @@ Here is the updated `README.md`:
 
 This project is a fork of [oddlama/gentoo-install](https://github.com/oddlama/gentoo-install) with enhanced features and additional functionality. It aspires to be your favourite way to install Gentoo. It aims to provide a smooth, reliable, and secure installation experience for both beginners and experts. You may configure it by using a menuconfig-inspired interface or simply via a config file.
 
+### 🎯 See It In Action
+
+![Configuration TUI Interface](contrib/Configuration_TUI.png)
+
+*The intuitive TUI interface makes Gentoo installation accessible while maintaining full power user control. Every option is explained with detailed help text.*
+
 It supports common disk layouts, various file systems like ext4, ZFS, and Btrfs, and additional layers such as LUKS encryption and mdraid. It robustly supports both **EFI (recommended)** and **BIOS** boot, and can be used with **systemd** or **OpenRC** as the init system.
 
 ## Features
@@ -22,6 +28,39 @@ It supports common disk layouts, various file systems like ext4, ZFS, and Btrfs,
   * **Secure by Default**: Includes options for a hardened SSH configuration, interactive password setting (no plaintext passwords in config), and secure system defaults.
   * **Automated and Repeatable**: Create a configuration once and use it for consistent, automated installations.
   * **Robust Error Handling & Cleanup**: The installer can now automatically clean up the environment after an interruption (Ctrl+C) to prevent leaving a broken state.
+
+## 🖥️ TUI Installer Interface
+
+The Gentoo Easy Install provides an intuitive, menu-driven interface that makes configuration simple while maintaining full control for power users.
+
+### 📋 Configuration Interface
+
+![Configuration TUI Interface](contrib/Configuration_TUI.png)
+
+*The main configuration interface showing the comprehensive menu system. Every option is explained with detailed help text, making it easy to configure your installation exactly as you want it.*
+
+**Key Features of the TUI:**
+- **Menu-driven navigation** with arrow keys and Enter
+- **Comprehensive help system** - press F1 or ? for detailed explanations
+- **Real-time validation** of configuration options
+- **Save/Load functionality** for configuration files
+- **Clear categorization** of related settings
+
+### 🛠️ Power User Control & Error Recovery
+
+![User Interaction and Error Recovery](contrib/user_interaction.png)
+
+*When things don't go as planned, the installer provides multiple recovery options. Power users can take manual control at any point, ensuring you're never locked out of your system.*
+
+**Power User Advantages:**
+- **Emergency Shell Access**: Drop into a shell at any point during installation
+- **Manual Override**: Bypass automated steps and take manual control
+- **Retry Capability**: Most commands can be retried without restarting
+- **Chroot Recovery**: Access the installed system even after failures
+- **Full System Access**: Mount, modify, and fix issues manually
+
+**Why Power Users Win:**
+> *"The installer automates the tedious parts but never locks you out. If something goes wrong, you can always take manual control and fix it yourself. This is Gentoo - you're in charge of your system."*
 
 ## Usage
 
@@ -54,6 +93,17 @@ Every option is explained in detail in `gentoo.conf.example` and in the help men
 6.  **Install Desktop Environment** (Optional): Installs and configures your chosen DE.
 7.  **Make System Bootable**: Generates `fstab`, builds the `initramfs`, and installs the bootloader.
 8.  **Finalize**: Sets the root password, creates a user account, and installs optional packages.
+
+### 🎯 What to Expect During Installation
+
+The installer provides clear feedback at every step:
+
+- **Progress Indicators**: Real-time status updates for each installation phase
+- **Error Handling**: Clear error messages with suggested solutions
+- **Recovery Options**: Multiple ways to recover from any issues
+- **Manual Control**: Take over at any point if you prefer manual intervention
+
+> 💡 **Pro Tip**: Even if the automated installation encounters issues, you can always drop into a shell and fix things manually. The installer is designed to be helpful, not restrictive.
 
 ### Secure User Account Creation
 
@@ -90,11 +140,50 @@ By default, the system uses `sys-kernel/gentoo-kernel-bin`. To update your kerne
 4.  Generate a new initramfs using the provided convenience script: `  /boot/efi/generate_initramfs.sh <new-kernel-version> /boot/efi/initramfs.img `.
 5.  Copy the new kernel to the correct location (e.g., `cp /boot/vmlinuz-<version> /boot/efi/vmlinuz.efi`).
 
-## Troubleshooting and FAQ
+## 🛠️ Troubleshooting and Power User Recovery
+
+The Gentoo Easy Install is designed with power users in mind. When things go wrong, you have full control to fix them.
+
+### 🚨 Common Issues and Solutions
 
   * **Installation Fails**: The script will prompt you to drop into an emergency shell to fix issues. Most commands can be retried without restarting the entire process.
   * **`blkid` Errors After Partitioning**: Ensure all devices are unmounted before starting. Use `wipefs -a <device>` to clear old filesystem signatures if problems persist.
   * **Chrooting After a Failed Install**: If you need to fix the installed system, mount your root partition under `/mnt` and run `./install --chroot /mnt`.
+
+### 🔧 Power User Recovery Methods
+
+**Emergency Shell Access:**
+```bash
+# During installation, you can always drop into a shell
+# The installer will prompt you with options:
+# 1. Retry the failed command
+# 2. Drop into emergency shell
+# 3. Abort and clean up
+```
+
+**Manual System Recovery:**
+```bash
+# If the installer fails, you can manually access your system
+mount /dev/sdaX /mnt  # Mount your root partition
+chroot /mnt            # Enter the installed system
+# Fix any issues manually, then continue installation
+```
+
+**Cleanup and Restart:**
+```bash
+# The installer can clean up after interruptions
+./install cleanup      # Clean up any partial installation
+./install             # Start fresh
+```
+
+### 💪 Why Power Users Love This Installer
+
+> *"Unlike other installers that lock you out when things go wrong, this one gives you full access to fix issues yourself. It's like having a helpful assistant that steps aside when you need to take control."*
+
+- **Never Locked Out**: Emergency shell access at any point
+- **Full System Control**: Mount, modify, and fix anything manually
+- **Intelligent Recovery**: Multiple recovery paths for any situation
+- **Respects Your Expertise**: Automates the boring parts, not the important decisions
 
 ## Attribution
 
