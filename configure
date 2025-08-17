@@ -537,6 +537,10 @@ function load_default_config() {
 	ENABLE_DISPLAY_BACKEND_TESTING=true
 	ENABLE_GPU_BENCHMARKING=false
 
+	# KDE System Configuration
+	ENABLE_KDE_POLKIT_ADMIN=true  # Grant wheel group administrative privileges
+	ENABLE_KDE_KWALLET_PAM=true   # Enable KWallet PAM integration for auto-unlocking
+
 	# Package Management Configuration
 	PACKAGE_USE_RULES=()
 	PACKAGE_KEYWORDS=()
@@ -1012,6 +1016,9 @@ MENU_ITEMS=(
 	"ENABLE_PERFORMANCE_OPTIMIZATION"
 	"ENABLE_DISPLAY_BACKEND_TESTING"
 	"ENABLE_GPU_BENCHMARKING"
+	"--------"
+	"ENABLE_KDE_POLKIT_ADMIN"
+	"ENABLE_KDE_KWALLET_PAM"
 	"--------"
 	"PACKAGE_USE_RULES"
 	"PACKAGE_KEYWORDS"
@@ -1898,6 +1905,24 @@ function ENABLE_GPU_BENCHMARKING_show()  { return 0; }
 function ENABLE_GPU_BENCHMARKING_help()  { echo "Enable GPU benchmarking tools for performance testing and optimization in VM environments."; }
 function ENABLE_GPU_BENCHMARKING_menu()  {
 	on_off_toggle ENABLE_GPU_BENCHMARKING
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_KDE_POLKIT_ADMIN_tag()   { echo "KDE Polkit Admin"; }
+function ENABLE_KDE_POLKIT_ADMIN_label() { echo "($(on_off_label ENABLE_KDE_POLKIT_ADMIN))"; }
+function ENABLE_KDE_POLKIT_ADMIN_show()  { [[ "$DESKTOP_ENVIRONMENT" == "kde" ]]; }
+function ENABLE_KDE_POLKIT_ADMIN_help()  { echo "Grant administrative privileges to users in the wheel group for KDE system dialogs. This allows non-root users to authenticate for system operations."; }
+function ENABLE_KDE_POLKIT_ADMIN_menu()  {
+	on_off_toggle ENABLE_KDE_POLKIT_ADMIN
+	UNSAVED_CHANGES=true
+}
+
+function ENABLE_KDE_KWALLET_PAM_tag()   { echo "KDE KWallet PAM"; }
+function ENABLE_KDE_KWALLET_PAM_label() { echo "($(on_off_label ENABLE_KDE_KWALLET_PAM))"; }
+function ENABLE_KDE_KWALLET_PAM_show()  { [[ "$DESKTOP_ENVIRONMENT" == "kde" ]]; }
+function ENABLE_KDE_KWALLET_PAM_help()  { echo "Enable KWallet PAM integration for automatic unlocking when logging in via SDDM. This provides seamless password storage and auto-unlocking functionality."; }
+function ENABLE_KDE_KWALLET_PAM_menu()  {
+	on_off_toggle ENABLE_KDE_KWALLET_PAM
 	UNSAVED_CHANGES=true
 }
 

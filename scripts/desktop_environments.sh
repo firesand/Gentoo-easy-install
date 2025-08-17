@@ -61,17 +61,34 @@ declare -A DE_DEFAULT_NM=(
     [fluxbox]="networkmanager"
 )
 
+# Essential packages that are critical for each DE to function properly
+# These packages are ALWAYS installed and cannot be overridden by user configuration
+declare -A DE_ESSENTIAL_PACKAGES=(
+    [kde]="kde-plasma/kwallet-pam"
+    [gnome]="gnome-base/gnome-shell"
+    [hyprland]="gui-apps/waybar"
+    [xfce]="xfce-base/xfce4-session"
+    [cinnamon]="gnome-base/gnome-session"
+    [mate]="mate-base/mate-session-manager"
+    [budgie]="gnome-base/gnome-session"
+    [i3]="gui-wm/i3"
+    [sway]="gui-wm/sway"
+    [openbox]="gui-wm/openbox"
+    [fluxbox]="gui-wm/fluxbox"
+)
+
 # Additional packages that are commonly needed for DEs
+# These can be overridden by user configuration
 declare -A DE_ADDITIONAL_PACKAGES=(
-    [kde]="kde-apps/konsole kde-apps/dolphin kde-apps/kate kde-plasma/kwallet-pam"
+    [kde]="kde-apps/konsole kde-apps/dolphin kde-apps/kate"
     [gnome]="gnome-extra/gnome-tweaks gnome-extra/gnome-software"
-    [hyprland]="gui-apps/waybar gui-apps/wofi gui-apps/kitty"
+    [hyprland]="gui-apps/wofi gui-apps/kitty"
     [xfce]="xfce-extra/xfce4-goodies"
     [cinnamon]="gnome-extra/gnome-tweaks"
     [mate]="mate-extra/mate-tweak"
     [budgie]="gnome-extra/gnome-tweaks"
     [i3]="gui-apps/dmenu gui-apps/i3status"
-    [sway]="gui-apps/waybar gui-apps/wofi"
+    [sway]="gui-apps/wofi"
     [openbox]="gui-apps/tint2 gui-apps/obconf"
     [fluxbox]="gui-apps/fbsetbg"
 )
@@ -95,6 +112,12 @@ function is_wayland_de() {
         hyprland|sway) echo "true" ;;
         *) echo "false" ;;
     esac
+}
+
+# Function to get essential packages for a DE
+function get_essential_packages_for_de() {
+    local de="$1"
+    [[ -n "${DE_ESSENTIAL_PACKAGES[$de]}" ]] && echo "${DE_ESSENTIAL_PACKAGES[$de]}" || echo ""
 }
 
 # Function to check if DE requires systemd

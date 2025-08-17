@@ -1533,7 +1533,17 @@ function install_desktop_environment() {
 		return 1
 	fi
 	
-	# Install additional DE packages
+	# Install essential DE packages (ALWAYS installed, cannot be overridden)
+	local essential_packages
+	essential_packages="$(get_essential_packages_for_de "$DESKTOP_ENVIRONMENT")"
+	if [[ -n "$essential_packages" ]]; then
+		einfo "Installing essential $DESKTOP_ENVIRONMENT packages (required for functionality): $essential_packages"
+		try emerge --verbose $essential_packages
+	else
+		einfo "No essential packages defined for $DESKTOP_ENVIRONMENT"
+	fi
+	
+	# Install additional DE packages (can be overridden by user configuration)
 	local additional_packages="${DE_ADDITIONAL_PACKAGES[$DESKTOP_ENVIRONMENT]}"
 	if [[ -n "$additional_packages" ]]; then
 		einfo "Installing additional $DESKTOP_ENVIRONMENT packages: $additional_packages"
@@ -1581,60 +1591,77 @@ function configure_kde_system() {
 	
 	einfo "Configuring KDE-specific system settings"
 	
-	# Ensure proper PAM configuration for KWallet auto-unlocking
-	if [[ -f /etc/pam.d/sddm ]]; then
-		einfo "Configuring KWallet PAM integration for SDDM"
-		
-		# Check if KWallet PAM lines are already present
-		if ! grep -q "pam_kwallet5.so" /etc/pam.d/sddm; then
-			einfo "Adding KWallet PAM configuration to SDDM"
+	# Configure KWallet PAM integration if enabled
+	if [[ "${ENABLE_KDE_KWALLET_PAM:-true}" == "true" ]]; then
+		if [[ -f /etc/pam.d/sddm ]]; then
+			einfo "Configuring KWallet PAM integration for SDDM"
 			
-			# Add KWallet PAM lines for auto-unlocking
-			# This allows KWallet to unlock automatically when user logs in
-			cat >> /etc/pam.d/sddm << 'EOF'
+			# Check if KWallet PAM lines are already present
+			if ! grep -q "pam_kwallet5.so" /etc/pam.d/sddm; then
+				einfo "Adding KWallet PAM configuration to SDDM"
+				
+				# Add KWallet PAM lines for auto-unlocking
+				# This allows KWallet to unlock automatically when user logs in
+				cat >> /etc/pam.d/sddm << 'EOF'
 
 # KWallet PAM integration for auto-unlocking
 auth           optional        pam_kwallet5.so
 session        optional        pam_kwallet5.so auto_start
 EOF
-			
-			einfo "KWallet PAM configuration added to SDDM"
+				
+				einfo "KWallet PAM configuration added to SDDM"
+			else
+				einfo "KWallet PAM configuration already present in SDDM"
+			fi
 		else
-			einfo "KWallet PAM configuration already present in SDDM"
+			ewarn "SDDM PAM configuration not found - KWallet auto-unlocking may not work"
 		fi
 	else
-		ewarn "SDDM PAM configuration not found - KWallet auto-unlocking may not work"
+		einfo "KWallet PAM integration disabled by user configuration"
 	fi
 	
-	# Configure polkit for non-root user authentication in KDE dialogs
-	einfo "Configuring polkit for KDE dialogs"
-	
-	# Create polkit rules directory if it doesn't exist
-	mkdir -p /etc/polkit-1/rules.d || die "Could not create /etc/polkit-1/rules.d directory"
-	
-	# Set up wheel group as administrators for KDE dialogs
-	# This allows users in the wheel group to authenticate for system operations
-	if [[ ! -f /etc/polkit-1/rules.d/49-wheel.rules ]]; then
-		einfo "Creating polkit rule for wheel group administrators"
+	# Configure polkit for non-root user authentication in KDE dialogs if enabled
+	if [[ "${ENABLE_KDE_POLKIT_ADMIN:-true}" == "true" ]]; then
+		einfo "Configuring polkit for KDE dialogs"
 		
-		cat > /etc/polkit-1/rules.d/49-wheel.rules << 'EOF'
+		# Create polkit rules directory if it doesn't exist
+		mkdir -p /etc/polkit-1/rules.d || die "Could not create /etc/polkit-1/rules.d directory"
+		
+		# Set up wheel group as administrators for KDE dialogs
+		# This allows users in the wheel group to authenticate for system operations
+		if [[ ! -f /etc/polkit-1/rules.d/49-wheel.rules ]]; then
+			einfo "Creating polkit rule for wheel group administrators"
+			
+			cat > /etc/polkit-1/rules.d/49-wheel.rules << 'EOF'
 polkit.addAdminRule(function(action, subject) {
     return ["unix-group:wheel"];
 });
 EOF
+			
+			einfo "Polkit rule created: wheel group users can authenticate for system operations"
+		else
+			einfo "Polkit rule for wheel group already exists"
+		fi
 		
-		einfo "Polkit rule created: wheel group users can authenticate for system operations"
+		# Set proper permissions for polkit rules
+		chmod 644 /etc/polkit-1/rules.d/49-wheel.rules \
+			|| ewarn "Could not set proper permissions on polkit rules"
+		
+		einfo "Polkit configuration completed: wheel group users can authenticate for KDE system dialogs"
 	else
-		einfo "Polkit rule for wheel group already exists"
+		einfo "Polkit administrative privileges disabled by user configuration"
+		einfo "Users will need to use sudo or su for system operations"
 	fi
 	
-	# Set proper permissions for polkit rules
-	chmod 644 /etc/polkit-1/rules.d/49-wheel.rules \
-		|| ewarn "Could not set proper permissions on polkit rules"
-	
 	einfo "KDE system configuration completed successfully"
-	einfo "Users in wheel group can now authenticate for KDE system dialogs"
-	einfo "KWallet will auto-unlock when logging in via SDDM"
+	if [[ "${ENABLE_KDE_KWALLET_PAM:-true}" == "true" ]]; then
+		einfo "KWallet will auto-unlock when logging in via SDDM"
+	fi
+	if [[ "${ENABLE_KDE_POLKIT_ADMIN:-true}" == "true" ]]; then
+		einfo "Users in wheel group can authenticate for KDE system dialogs"
+	else
+		einfo "Administrative privileges require sudo/su (polkit disabled)"
+	fi
 }
 
 function install_display_manager() {
