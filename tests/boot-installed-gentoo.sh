@@ -2,7 +2,7 @@
 
 # Boot Installed Gentoo VM Script
 # This script boots an already installed Gentoo system from existing VM storage
-# Usage: ./boot-installed-gentoo.sh
+# Usage: ./boot-installed-gentoo.sh [--disk /path/to/disk.qcow2]
 
 set -e
 
@@ -21,6 +21,40 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Function to parse command line arguments
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --disk)
+                if [[ -n "$2" && "$2" != --* ]]; then
+                    VM_DISK="$2"
+                    # Update VM name based on disk filename
+                    VM_NAME=$(basename "$2" .qcow2)
+                    # Update shared folder path
+                    SHARED_FOLDER="$HOME/vm-shared/${VM_NAME}"
+                    shift 2
+                else
+                    echo -e "${RED}❌ Error: --disk requires a file path${NC}"
+                    exit 1
+                fi
+                ;;
+            --help|-h)
+                show_help
+                exit 0
+                ;;
+            --config)
+                show_configuration
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}❌ Unknown option: $1${NC}"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+}
 
 # Function to check prerequisites
 check_prerequisites() {
@@ -164,9 +198,10 @@ show_help() {
     echo -e "${CYan}📋 Current Configuration:${NC}"
     show_configuration
     echo -e "${CYan}🔧 Usage:${NC}"
-    echo "  $0                    # Start VM with current settings"
-    echo "  $0 --help            # Show this help"
-    echo "  $0 --config          # Show current configuration"
+    echo "  $0                                    # Start VM with current settings"
+    echo "  $0 --disk /path/to/disk.qcow2        # Start VM with specific disk"
+    echo "  $0 --help                            # Show this help"
+    echo "  $0 --config                          # Show current configuration"
     echo
     echo -e "${CYan}📱 SSH Access:${NC}"
     echo "  ssh -p $SSH_PORT root@localhost"
@@ -174,6 +209,7 @@ show_help() {
     echo -e "${CYan}💡 Tips:${NC}"
     echo "  • The VM will boot directly from your installed Gentoo system"
     echo "  • No ISO is needed - it boots from the existing disk"
+    echo "  • Use --disk to specify a different .qcow2 file"
     echo "  • Shared folder is available at /mnt/shared inside the VM"
     echo "  • Use Ctrl+C to stop the VM gracefully"
     echo
@@ -181,29 +217,22 @@ show_help() {
 
 # Main script logic
 main() {
-    case "${1:-}" in
-        --help|-h)
-            show_help
-            exit 0
-            ;;
-        --config)
-            show_configuration
-            exit 0
-            ;;
-        "")
-            # No arguments - start the VM
-            check_prerequisites
-            show_configuration
-            setup_shared_folder
-            start_vm
-            ;;
-        *)
-            echo -e "${RED}❌ Unknown option: $1${NC}"
-            echo "Use --help for usage information"
-            exit 1
-            ;;
-    esac
+    # Parse command line arguments first
+    parse_arguments "$@"
+    
+    # Check prerequisites
+    check_prerequisites
+    
+    # Show configuration
+    show_configuration
+    
+    # Setup shared folder
+    setup_shared_folder
+    
+    # Start VM
+    start_vm
 }
 
 # Run main function
 main "$@"
+

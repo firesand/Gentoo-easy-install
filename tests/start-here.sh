@@ -3,8 +3,6 @@
 # Start Here - Your Entry Point to Advanced VM Management
 # This script shows you exactly where to begin
 
-set -e
-
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -12,6 +10,92 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Function to find available VM disks
+find_vm_disks() {
+    local disks=()
+    local common_paths=(
+        "$HOME/vm-disks"
+        "$HOME/Downloads"
+        "$HOME/.local/share/Trash/files"
+        "$HOME/Desktop"
+        "$HOME/Documents"
+    )
+    
+    # Send debug output to stderr so it doesn't interfere with the return value
+    echo -e "${BLUE}🔍 Searching for available VM disks...${NC}" >&2
+    
+    for path in "${common_paths[@]}"; do
+        if [[ -d "$path" ]]; then
+            echo "  Checking: $path" >&2
+            while IFS= read -r -d '' file; do
+                if [[ -f "$file" && "$file" == *.qcow2 ]]; then
+                    local size=$(du -h "$file" 2>/dev/null | cut -f1 || echo "Unknown")
+                    local name=$(basename "$file")
+                    disks+=("$file|$name|$size")
+                    echo "    Found: $name ($size)" >&2
+                fi
+            done < <(find "$path" -maxdepth 2 -name "*.qcow2" -type f -print0 2>/dev/null)
+        fi
+    done
+    
+    echo -e "${GREEN}✓ Found ${#disks[@]} VM disk(s)${NC}" >&2
+    echo >&2
+    
+    # Return only the disk data to stdout
+    printf '%s\n' "${disks[@]}"
+}
+
+# Function to show disk selection menu
+show_disk_selection() {
+    local disks=("$@")
+    local selected_disk=""
+    
+    if [[ ${#disks[@]} -eq 0 ]]; then
+        echo -e "${RED}❌ No VM disks found!${NC}" >&2
+        echo "Please ensure you have .qcow2 files in common locations:" >&2
+        echo "  • ~/vm-disks/" >&2
+        echo "  • ~/Downloads/" >&2
+        echo "  • ~/Desktop/" >&2
+        echo "  • ~/Documents/" >&2
+        echo >&2
+        read -p "Press Enter to return to main menu..." >&2
+        return ""
+    fi
+    
+    echo -e "${CYAN}📋 Available VM Disks:${NC}" >&2
+    echo "=================================" >&2
+    
+    local i=1
+    for disk in "${disks[@]}"; do
+        IFS='|' read -r full_path name size <<< "$disk"
+        echo -e "  ${i}) ${CYAN}${name}${NC} (${GREEN}${size}${NC})" >&2
+        echo "     Path: ${YELLOW}${full_path}${NC}" >&2
+        echo >&2
+        ((i++))
+    done
+    
+    echo -e "  0) Back to main menu" >&2
+    echo >&2
+    
+    while true; do
+        read -p "Select disk to boot (0-${#disks[@]}): " choice >&2
+        
+        if [[ "$choice" == "0" ]]; then
+            return ""
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#disks[@]} ]]; then
+            local selected_index=$((choice - 1))
+            IFS='|' read -r full_path name size <<< "${disks[$selected_index]}"
+            selected_disk="$full_path"
+            break
+        else
+            echo -e "${RED}❌ Invalid choice. Please enter 0-${#disks[@]}.${NC}" >&2
+        fi
+    done
+    
+    # Return only the selected disk path to stdout
+    echo "$selected_disk"
+}
 
 # Function to show main menu
 show_main_menu() {
@@ -110,9 +194,29 @@ handle_boot_existing() {
     echo "  🔧 Optimized for performance with KVM and virtio devices"
     echo
 
-    echo -e "${GREEN}📋 Current Configuration:${NC}"
-    echo "  VM Name: Gentoo_TUI"
-    echo "  Storage: /home/edo/vm-disks/Gentoo_TUI.qcow2"
+    # Find available VM disks
+    local available_disks
+    available_disks=$(find_vm_disks)
+    
+    # Convert output to array
+    IFS=$'\n' read -r -d '' -a disk_array <<< "$available_disks"
+    
+    # Show disk selection menu
+    local selected_disk
+    selected_disk=$(show_disk_selection "${disk_array[@]}")
+    
+    if [[ -z "$selected_disk" ]]; then
+        return  # User chose to go back
+    fi
+    
+    # Extract disk info for display
+    local disk_name=$(basename "$selected_disk")
+    local disk_size=$(du -h "$selected_disk" 2>/dev/null | cut -f1 || echo "Unknown")
+    
+    echo -e "${GREEN}📋 Selected Configuration:${NC}"
+    echo "  VM Name: ${disk_name%.qcow2}"
+    echo "  Storage: $selected_disk"
+    echo "  Size: $disk_size"
     echo "  RAM: 16GB | CPU: 8 cores | SSH: Port 2223"
     echo
 
@@ -128,7 +232,7 @@ handle_boot_existing() {
     echo "  ⚙️  qemu-gentoo-installed.conf - Manual QEMU arguments"
     echo
 
-    read -p "Press Enter to launch boot-installed-gentoo.sh... "
+    read -p "Press Enter to launch boot-installed-gentoo.sh with selected disk... "
 
     echo
     echo -e "${GREEN}🚀 Launching boot tool...${NC}"
@@ -141,7 +245,8 @@ handle_boot_existing() {
         echo -e "${GREEN}✓ Boot tool is ready!${NC}"
         echo "  Starting in 3 seconds..."
         sleep 3
-        ./boot-installed-gentoo.sh
+        # Pass the selected disk as a parameter
+        ./boot-installed-gentoo.sh --disk "$selected_disk"
     else
         echo -e "${RED}❌ Boot tool needs execute permissions${NC}"
         echo "  Run: chmod +x boot-installed-gentoo.sh"

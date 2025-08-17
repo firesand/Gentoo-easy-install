@@ -93,3 +93,6 @@ mount -t virtiofs shared /mnt/shared
 - `qemu-gentoo-installed.conf` - QEMU command line arguments
 - `gentoo-vm-launcher.sh` - Full-featured VM launcher with ISO support
 - `enhanced-vm-launcher.sh` - Advanced VM configuration options
+
+
+
