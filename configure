@@ -1812,13 +1812,57 @@ function DESKTOP_ENVIRONMENT_menu()  {
 		"enlightenment" "Enlightenment - Advanced window manager" \
 		"pantheon" "Pantheon - Elementary OS desktop"
 	then
+		local previous_de="$DESKTOP_ENVIRONMENT"
 		DESKTOP_ENVIRONMENT="$dialog_out"
 		[[ "$DESKTOP_ENVIRONMENT" == "none" ]] && DESKTOP_ENVIRONMENT=""
 		UNSAVED_CHANGES=true
 		
-		# Inform user about GURU overlay requirement for Hyprland
+		# Handle Hyprland overlay requirement
 		if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" ]]; then
-			dialog --title "Hyprland Requirement" --msgbox "\nHyprland and its ecosystem packages (like hypridle, waybar, wofi) are in the GURU overlay.\n\nThe installer will automatically enable this third-party repository for you to ensure a successful installation.\n\nThis overlay contains community-maintained packages that are not in the main Gentoo repository." 12 70
+			# Check if guru overlay is already in the list
+			local guru_exists=false
+			for overlay in "${OVERLAY_NAMES[@]}"; do
+				if [[ "$overlay" == "guru" ]]; then
+					guru_exists=true
+					break
+				fi
+			done
+			
+			# Add guru overlay if not exists
+			if [[ "$guru_exists" == false ]]; then
+				OVERLAY_NAMES+=("guru")
+				dialog --title "Hyprland Requirement" \
+					--msgbox "\nHyprland and its ecosystem packages (like hypridle, waybar, wofi) are in the GURU overlay.\n\nThe 'guru' overlay has been automatically added to your configuration.\n\nThis overlay contains community-maintained packages that are not in the main Gentoo repository." \
+					12 70
+			else
+				dialog --title "Hyprland Requirement" \
+					--msgbox "\nHyprland selected. The 'guru' overlay is already configured.\n\nThis overlay contains Hyprland and its ecosystem packages." \
+					10 60
+			fi
+		elif [[ "$previous_de" == "hyprland" && "$DESKTOP_ENVIRONMENT" != "hyprland" ]]; then
+			# User changed from Hyprland to something else
+			# Optionally ask if they want to remove guru overlay
+			local guru_exists=false
+			local guru_index=-1
+			local i=0
+			for overlay in "${OVERLAY_NAMES[@]}"; do
+				if [[ "$overlay" == "guru" ]]; then
+					guru_exists=true
+					guru_index=$i
+					break
+				fi
+				((i++))
+			done
+			
+			if [[ "$guru_exists" == true ]]; then
+				dialog --title "Remove GURU Overlay?" \
+					--yesno "You've changed from Hyprland to another DE.\n\nThe 'guru' overlay was added for Hyprland.\nDo you want to remove it from your configuration?" \
+					10 60
+				if [[ $? -eq 0 ]]; then
+					unset 'OVERLAY_NAMES[guru_index]'
+					OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
+				fi
+			fi
 		fi
 	else
 		# Return to menu
@@ -2042,7 +2086,20 @@ function PACKAGE_KEYWORDS_menu()  {
 
 
 function OVERLAY_MANAGER_tag()   { echo "Portage overlays"; }
-function OVERLAY_MANAGER_label() { echo "${#OVERLAY_NAMES[@]} overlays"; }
+function OVERLAY_MANAGER_label() { 
+	if [[ ${#OVERLAY_NAMES[@]} -eq 0 ]]; then
+		echo "No overlays configured"
+	elif [[ ${#OVERLAY_NAMES[@]} -eq 1 ]]; then
+		echo "1 overlay: ${OVERLAY_NAMES[0]}"
+	else
+		local overlay_list="${OVERLAY_NAMES[*]}"
+		if [[ ${#overlay_list} -gt 30 ]]; then
+			echo "${#OVERLAY_NAMES[@]} overlays: $(ellipsis 25 "$overlay_list")"
+		else
+			echo "${#OVERLAY_NAMES[@]} overlays: $overlay_list"
+		fi
+	fi
+}
 function OVERLAY_MANAGER_show()  { return 0; }
 function OVERLAY_MANAGER_help()  { echo "Manage portage overlays using modern eselect repository. Add, remove, or configure overlay names (e.g., guru, steam-overlay)."; }
 function OVERLAY_MANAGER_menu()  {
@@ -2050,55 +2107,81 @@ function OVERLAY_MANAGER_menu()  {
         local configured_overlays=()
         local i=1
         for name in "${OVERLAY_NAMES[@]}"; do
-            configured_overlays+=("$((i++))" "$name")
+            configured_overlays+=("$i" "$name")
+            ((i++))
         done
 
         # Check if we have any overlays
         if [[ ${#OVERLAY_NAMES[@]} -eq 0 ]]; then
             # No overlays, show add option only
             dialog --title "Portage Overlays" \
-                   --msgbox "No overlays configured.\n\nSelect OK to add a new overlay." \
-                   "${INPUTBOX_SIZE[@]}"
+                   --yes-label "Add" \
+                   --no-label "Back" \
+                   --yesno "No overlays configured.\n\nWould you like to add a new overlay?" \
+                   10 50
             
-            # Prompt to add
-            dialog --title "Add Overlay" \
-                   --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" \
-                   "${INPUTBOX_SIZE[@]}" ""
-            if [[ $? -eq 0 && -n "$dialog_out" ]]; then
-                OVERLAY_NAMES+=("$dialog_out")
-                UNSAVED_CHANGES=true
-            else
-                break
-            fi
-        else
-            # Show menu - WITHOUT the $item_count parameter!
-            dialog --title "Portage Overlays" \
-                   --extra-button --extra-label "Add" \
-                   --cancel-label "Back" \
-                   --ok-label "Remove" \
-                   --menu "Select an overlay to REMOVE, or choose ADD to add a new one." \
-                   "${MENU_SIZE[@]}" \
-                   "${configured_overlays[@]}"
-
-            local diag_exit="$?"
-            local choice="$dialog_out"
-
-            if [[ $diag_exit -eq 0 ]]; then
-                # Remove selected overlay
-                local index_to_remove=$((choice - 1))
-                if [[ $index_to_remove -ge 0 && $index_to_remove -lt ${#OVERLAY_NAMES[@]} ]]; then
-                    unset 'OVERLAY_NAMES[index_to_remove]'
-                    OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
-                    UNSAVED_CHANGES=true
-                fi
-            elif [[ $diag_exit -eq 3 ]]; then
-                # Add a new overlay
+            if [[ $? -eq 0 ]]; then
+                # Prompt to add
                 dialog --title "Add Overlay" \
                        --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" \
                        "${INPUTBOX_SIZE[@]}" ""
                 if [[ $? -eq 0 && -n "$dialog_out" ]]; then
                     OVERLAY_NAMES+=("$dialog_out")
                     UNSAVED_CHANGES=true
+                fi
+            else
+                break
+            fi
+        else
+            # Show menu with overlays
+            dialog --title "Portage Overlays (${#OVERLAY_NAMES[@]} configured)" \
+                   --extra-button --extra-label "Add" \
+                   --cancel-label "Back" \
+                   --ok-label "Remove" \
+                   --menu "\nConfigured overlays:\n\nSelect an overlay to REMOVE it,\nor choose 'Add' to add a new overlay." \
+                   "${MENU_SIZE[@]}" \
+                   "${configured_overlays[@]}"
+
+            local diag_exit="$?"
+            local choice="$dialog_out"
+
+            if [[ $diag_exit -eq 0 && -n "$choice" ]]; then
+                # Remove selected overlay
+                local index_to_remove=$((choice - 1))
+                if [[ $index_to_remove -ge 0 && $index_to_remove -lt ${#OVERLAY_NAMES[@]} ]]; then
+                    local overlay_to_remove="${OVERLAY_NAMES[$index_to_remove]}"
+                    dialog --title "Confirm Removal" \
+                           --yesno "Remove overlay '$overlay_to_remove'?" \
+                           7 50
+                    if [[ $? -eq 0 ]]; then
+                        unset 'OVERLAY_NAMES[index_to_remove]'
+                        OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
+                        UNSAVED_CHANGES=true
+                    fi
+                fi
+            elif [[ $diag_exit -eq 3 ]]; then
+                # Add a new overlay
+                dialog --title "Add Overlay" \
+                       --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):\n\nCurrent overlays: ${OVERLAY_NAMES[*]}" \
+                       12 60 ""
+                if [[ $? -eq 0 && -n "$dialog_out" ]]; then
+                    # Check if overlay already exists
+                    local already_exists=false
+                    for existing in "${OVERLAY_NAMES[@]}"; do
+                        if [[ "$existing" == "$dialog_out" ]]; then
+                            already_exists=true
+                            break
+                        fi
+                    done
+                    
+                    if [[ "$already_exists" == true ]]; then
+                        dialog --title "Warning" \
+                               --msgbox "Overlay '$dialog_out' is already configured." \
+                               7 50
+                    else
+                        OVERLAY_NAMES+=("$dialog_out")
+                        UNSAVED_CHANGES=true
+                    fi
                 fi
             else
                 # User selected Back or pressed ESC
