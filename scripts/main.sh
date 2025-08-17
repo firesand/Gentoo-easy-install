@@ -2020,7 +2020,7 @@ function install_desktop_environment() {
 		
 		# Wallpaper and visual effects
 		if echo "$HYPRLAND_CONFIG" | grep -q "swww"; then
-			hypr_deps+=("media-gfx/swww")
+			hypr_deps+=("gui-apps/swww")
 		fi
 		
 		# Screenshot and clipboard tools
@@ -2035,7 +2035,7 @@ function install_desktop_environment() {
 		
 		# Brightness control
 		if echo "$HYPRLAND_CONFIG" | grep -q "brightnessctl"; then
-			hypr_deps+=("sys-power/brightnessctl")
+			hypr_deps+=("app-misc/brightnessctl")
 		fi
 		
 		# Notifications
@@ -2045,7 +2045,7 @@ function install_desktop_environment() {
 		
 		# Clipboard history
 		if echo "$HYPRLAND_CONFIG" | grep -q "cliphist"; then
-			hypr_deps+=("gui-apps/cliphist")
+			hypr_deps+=("app-misc/cliphist")
 		fi
 		
 		# Idle management
