@@ -2053,39 +2053,65 @@ function OVERLAY_MANAGER_menu()  {
             configured_overlays+=("$((i++))" "$name")
         done
 
-        # The number of items is the number of pairs (name + tag)
-        local item_count=${#configured_overlays[@]}
-
-        dialog --title "Portage Overlays" \
-               --extra-button --extra-label "Add" \
-               --cancel-button "Back" \
-               --ok-label "Remove" \
-               --menu "Select an overlay to REMOVE, or choose ADD to add a new one." \
-               "${MENU_SIZE[@]}" \
-               $item_count \
-               "${configured_overlays[@]}"
-
-        local diag_exit="$?"
-        local choice="$dialog_out"
-
-        if [[ $diag_exit -eq 0 ]]; then
-            # Remove selected overlay
-            local index_to_remove=$((choice - 1))
-            if [[ -v "OVERLAY_NAMES[index_to_remove]" ]]; then
-                unset 'OVERLAY_NAMES[index_to_remove]'
-                OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
-                UNSAVED_CHANGES=true
-            fi
-        elif [[ $diag_exit -eq 3 ]]; then
-            # Add a new overlay
-            dialog --title "Add Overlay" --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" "${INPUTBOX_SIZE[@]}" ""
-            if [[ $? -eq 0 && -n "$dialog_out" ]]; then
-                OVERLAY_NAMES+=("$dialog_out")
-                UNSAVED_CHANGES=true
+        # Calculate the actual number of menu items (each item = 2 array elements)
+        local item_count=$((${#configured_overlays[@]} / 2))
+        
+        # If no overlays are configured, show a message instead of blank dialog
+        if [[ $item_count -eq 0 ]]; then
+            dialog --title "Portage Overlays" \
+                   --extra-button --extra-label "Add" \
+                   --cancel-label "Back" \
+                   --msgbox "No overlays configured.\n\nPress <Add> to add a new overlay." \
+                   "${INPUTBOX_SIZE[@]}"
+            
+            local diag_exit="$?"
+            if [[ $diag_exit -eq 3 ]]; then
+                # Add button pressed
+                dialog --title "Add Overlay" \
+                       --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" \
+                       "${INPUTBOX_SIZE[@]}" ""
+                if [[ $? -eq 0 && -n "$dialog_out" ]]; then
+                    OVERLAY_NAMES+=("$dialog_out")
+                    UNSAVED_CHANGES=true
+                fi
+            else
+                # Back button or ESC
+                break
             fi
         else
-            # User selected Back or pressed ESC
-            break
+            # Show the menu with correct item count
+            dialog --title "Portage Overlays" \
+                   --extra-button --extra-label "Add" \
+                   --cancel-label "Back" \
+                   --ok-label "Remove" \
+                   --menu "Select an overlay to REMOVE, or choose ADD to add a new one." \
+                   "${MENU_SIZE[@]}" \
+                   "${configured_overlays[@]}"
+
+            local diag_exit="$?"
+            local choice="$dialog_out"
+
+            if [[ $diag_exit -eq 0 ]]; then
+                # Remove selected overlay
+                local index_to_remove=$((choice - 1))
+                if [[ -v "OVERLAY_NAMES[index_to_remove]" ]]; then
+                    unset 'OVERLAY_NAMES[index_to_remove]'
+                    OVERLAY_NAMES=("${OVERLAY_NAMES[@]}") # Re-index array
+                    UNSAVED_CHANGES=true
+                fi
+            elif [[ $diag_exit -eq 3 ]]; then
+                # Add a new overlay
+                dialog --title "Add Overlay" \
+                       --inputbox "\nEnter the name of the overlay (e.g., guru, steam-overlay):" \
+                       "${INPUTBOX_SIZE[@]}" ""
+                if [[ $? -eq 0 && -n "$dialog_out" ]]; then
+                    OVERLAY_NAMES+=("$dialog_out")
+                    UNSAVED_CHANGES=true
+                fi
+            else
+                # User selected Back or pressed ESC
+                break
+            fi
         fi
     done
 }
