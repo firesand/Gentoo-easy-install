@@ -18,6 +18,10 @@ source "$GENTOO_INSTALL_REPO_DIR/scripts/desktop_environments.sh" || exit 1
 # IMPORTANT: NetworkManager and dhcpcd service conflicts are handled in configure_openrc()
 # Only one network management service should run at a time to avoid unpredictable results
 
+# GCC COMPATIBILITY: The ensure_gcc_compatibility() function automatically handles
+# compiler version requirements for packages like Hyprland (GCC 15+)
+# This prevents installation failures due to outdated Stage3 tarball compilers
+
 
 ################################################
 # Functions
@@ -1825,6 +1829,10 @@ function install_desktop_environment() {
 	# Portage profiles are essential because they set dozens of critical, system-wide USE flags
 	# required for graphical environments, such as X, gtk, dbus, policykit, and udisks.
 	# Without the correct profile, desktop environments may be broken or incomplete.
+	#
+	# FUTURE-PROOF: This function now dynamically detects the latest available profile version
+	# instead of hardcoding specific versions (e.g., 17.1, 23.0). It automatically adapts to
+	# new Gentoo profile releases, ensuring long-term maintainability.
 	
 	[[ -z "$DESKTOP_ENVIRONMENT" ]] && return 0
 	
@@ -1843,36 +1851,36 @@ function install_desktop_environment() {
 	
 	# Set the correct Portage profile based on the selected DE
 	einfo "Setting Portage profile for $DESKTOP_ENVIRONMENT..."
+	local profile_type=""
 	local selected_profile=""
 	
+	# Determine the base profile type needed
 	if [[ "$DESKTOP_ENVIRONMENT" == "kde" ]]; then
-		local kde_profile
-		if [[ "$SYSTEMD" == "true" ]]; then
-			kde_profile="desktop/plasma/systemd"
-		else
-			kde_profile="desktop/plasma"
-		fi
-		einfo "Selected KDE profile: $kde_profile"
-		try eselect profile set "$kde_profile"
-		selected_profile="$kde_profile"
-		
+		profile_type="desktop/plasma"
 	elif [[ "$DESKTOP_ENVIRONMENT" == "gnome" ]]; then
-		einfo "Setting Portage profile for GNOME..."
-		try eselect profile set desktop/gnome/systemd
-		selected_profile="desktop/gnome/systemd"
-		
-	elif [[ -n "$DESKTOP_ENVIRONMENT" ]]; then
-		# For XFCE, Hyprland, and other general desktops, set the generic 'desktop' profile
-		einfo "Setting generic desktop profile for $DESKTOP_ENVIRONMENT..."
-		local desktop_profile
-		if [[ "$SYSTEMD" == "true" ]]; then
-			desktop_profile="desktop/systemd"
-		else
-			desktop_profile="desktop"
+		profile_type="desktop/gnome"
+	else
+		# For XFCE, Hyprland, etc., use the generic desktop profile
+		profile_type="desktop"
+	fi
+	
+	# Append init system if systemd is used
+	if [[ "$SYSTEMD" == "true" ]]; then
+		# GNOME profile already includes systemd
+		if [[ "$profile_type" != "desktop/gnome" ]]; then
+			profile_type+="/systemd"
 		fi
-		einfo "Selected profile: $desktop_profile"
-		try eselect profile set "$desktop_profile"
-		selected_profile="$desktop_profile"
+	fi
+	
+	# Dynamically find the latest stable profile matching the type
+	# This makes the script future-proof (e.g., for profile version 23.0)
+	selected_profile=$(eselect profile list | grep "${profile_type}" | grep -v 'developer\|hardened\|selinux' | sort -r | head -n 1 | awk '{print $1}')
+	
+	if [[ -n "$selected_profile" ]]; then
+		einfo "Dynamically selected latest profile: $selected_profile"
+		try eselect profile set "$selected_profile"
+	else
+		ewarn "Could not dynamically determine the latest profile for '$profile_type'. Installation may continue with the default profile."
 	fi
 	
 	# Verify profile was set correctly
@@ -1897,26 +1905,25 @@ function install_desktop_environment() {
 	fi
 	
 	# Enable GURU overlay for Hyprland (required for packages like hypridle, waybar, wofi)
+	# IMPROVED: This section now uses the robust overlay management function
 	if [[ "$DESKTOP_ENVIRONMENT" == "hyprland" ]]; then
 		einfo "Hyprland selected. Enabling the GURU overlay for required packages..."
 		
-		# Check if GURU overlay is already enabled
-		if eselect repository list | grep -q "guru"; then
-			einfo "✅ GURU overlay is already enabled"
+		# Use the robust overlay management function
+		if manage_overlay_robustly "guru"; then
+			einfo "✅ GURU overlay setup completed successfully"
 		else
-			# Install the tool to manage overlays if not present
-			einfo "Installing overlay management tools..."
-			try emerge --verbose app-eselect/eselect-repository
-			
-			# Add the GURU repository
-			einfo "Adding GURU overlay..."
-			try eselect repository add guru
-			
-			# Sync the new repository to make packages available
-			einfo "Syncing GURU overlay..."
-			try emerge --sync guru
-			
-			einfo "✅ GURU overlay successfully enabled and synced"
+			ewarn "⚠️  GURU overlay setup encountered issues, but continuing with installation"
+			ewarn "Some Hyprland packages may not be available immediately"
+		fi
+		
+		# CRITICAL: Ensure GCC is up to date for Hyprland compilation
+		# Hyprland requires GCC 15+ but older Stage3 tarballs may have GCC 14
+		if ensure_gcc_compatibility 15 "Hyprland"; then
+			einfo "✅ GCC compatibility check passed for Hyprland"
+		else
+			ewarn "⚠️  GCC compatibility check failed for Hyprland"
+			ewarn "Installation may fail due to compiler incompatibility"
 		fi
 		
 		# Verify that key Hyprland packages are now available
@@ -1936,6 +1943,12 @@ function install_desktop_environment() {
 		if [[ -v missing_packages && ${#missing_packages[@]} -gt 0 ]]; then
 			ewarn "Some Hyprland packages are still not available: ${missing_packages[*]}"
 			ewarn "This may indicate a sync issue. Consider running: emerge --sync guru"
+			
+			# Provide additional troubleshooting information
+			einfo "🔍 GURU overlay troubleshooting:"
+			einfo "   • Check if GURU is enabled: eselect repository list"
+			einfo "   • Check GURU sync status: emerge --sync guru"
+			einfo "   • Verify GURU configuration: cat /etc/portage/repos.conf/guru.conf"
 		fi
 	fi
 	
@@ -2705,5 +2718,180 @@ function configure_raid_bios_bootloader() {
 		einfo "System will automatically fail over to available RAID members"
 	else
 		einfo "No RAID members detected for BIOS bootloader redundancy"
+	fi
+}
+
+function manage_overlay_robustly() {
+	# Robust overlay management function that handles various overlay states
+	# Usage: manage_overlay_robustly <overlay_name> [sync_after_enable]
+	# Args:
+	#   overlay_name: Name of the overlay (e.g., "guru", "gentoo-zh")
+	#   sync_after_enable: Whether to sync after enabling (default: true)
+	
+	local overlay_name="$1"
+	local sync_after_enable="${2:-true}"
+	
+	[[ -n "$overlay_name" ]] || return 1
+	
+	einfo "Managing overlay: $overlay_name"
+	
+	# Install overlay management tools if not present
+	if ! command -v eselect >/dev/null 2>&1 || ! eselect repository --help >/dev/null 2>&1; then
+		einfo "Installing overlay management tools..."
+		try emerge --verbose app-eselect/eselect-repository
+	fi
+	
+	# Check if overlay is already enabled
+	if eselect repository list | grep -q "$overlay_name"; then
+		einfo "✅ Overlay '$overlay_name' is already enabled"
+		return 0
+	fi
+	
+	# Check if overlay exists but is disabled
+	if eselect repository list --disabled | grep -q "$overlay_name"; then
+		einfo "Overlay '$overlay_name' found but disabled. Enabling it..."
+		if try eselect repository enable "$overlay_name"; then
+			einfo "✅ Overlay '$overlay_name' successfully enabled"
+		else
+			ewarn "⚠️  Failed to enable overlay '$overlay_name'"
+			return 1
+		fi
+	else
+		# Check if overlay configuration already exists in the system
+		if [[ -f "/etc/portage/repos.conf/${overlay_name}.conf" ]] || \
+		   [[ -f /usr/share/portage/config/repos.conf ]] && grep -q "$overlay_name" /usr/share/portage/config/repos.conf; then
+			einfo "Overlay '$overlay_name' configuration found in system, attempting to enable..."
+			if try eselect repository enable "$overlay_name"; then
+				einfo "✅ Overlay '$overlay_name' successfully enabled from existing configuration"
+			else
+				ewarn "⚠️  Failed to enable existing overlay '$overlay_name'"
+				return 1
+			fi
+		else
+			# Try to add the overlay
+			einfo "Adding overlay '$overlay_name'..."
+			if eselect repository add "$overlay_name" 2>/dev/null; then
+				einfo "✅ Overlay '$overlay_name' successfully added"
+			else
+				# If add fails, try to enable it (it might already exist)
+				einfo "Overlay '$overlay_name' add failed, attempting to enable existing repository..."
+				if try eselect repository enable "$overlay_name"; then
+					einfo "✅ Overlay '$overlay_name' successfully enabled"
+				else
+					ewarn "⚠️  Failed to add or enable overlay '$overlay_name'"
+					ewarn "This may indicate the overlay is not available or there are permission issues"
+					return 1
+				fi
+			fi
+		fi
+	fi
+	
+	# Sync the overlay if requested
+	if [[ "$sync_after_enable" == "true" ]]; then
+		einfo "Syncing overlay '$overlay_name'..."
+		if try emerge --sync "$overlay_name"; then
+			einfo "✅ Overlay '$overlay_name' successfully synced"
+		else
+			ewarn "⚠️  Overlay '$overlay_name' sync failed. This may be due to network issues or repository problems."
+			ewarn "You can try to sync manually later with: emerge --sync $overlay_name"
+			ewarn "For now, continuing - some packages may not be available immediately."
+		fi
+	fi
+	
+	einfo "✅ Overlay '$overlay_name' management completed"
+	return 0
+}
+
+function ensure_gcc_compatibility() {
+	# Ensure GCC version is compatible with specified requirements
+	# Usage: ensure_gcc_compatibility <min_major_version> [package_name]
+	# Args:
+	#   min_major_version: Minimum GCC major version required (e.g., 15)
+	#   package_name: Name of package requiring this GCC version (for logging)
+	
+	local min_gcc_major="$1"
+	local package_name="${2:-"the selected package"}"
+	
+	[[ -n "$min_gcc_major" ]] || return 1
+	
+	einfo "Checking GCC compatibility for $package_name (requires GCC $min_gcc_major+)..."
+	
+	# Get current GCC version
+	local current_gcc_version
+	current_gcc_version=$(gcc --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+	
+	if [[ -z "$current_gcc_version" ]]; then
+		ewarn "⚠️  Could not determine current GCC version"
+		return 1
+	fi
+	
+	local gcc_major
+	gcc_major=$(echo "$current_gcc_version" | cut -d. -f1)
+	
+	if [[ "$gcc_major" -ge "$min_gcc_major" ]]; then
+		einfo "✅ GCC version $current_gcc_version is compatible (requires $min_gcc_major+)"
+		return 0
+	fi
+	
+	ewarn "⚠️  Current GCC version $current_gcc_version is too old for $package_name (requires GCC $min_gcc_major+)"
+	einfo "🔄 Upgrading GCC to latest version for compatibility..."
+	
+	# Create package.accept_keywords directory if it doesn't exist
+	mkdir -p /etc/portage/package.accept_keywords || die "Could not create package.accept_keywords directory"
+	
+	# Unmask the latest GCC version
+	einfo "Unmasking latest GCC version..."
+	echo "sys-devel/gcc" >> /etc/portage/package.accept_keywords/gcc || ewarn "Could not unmask GCC"
+	
+	# Sync Portage to get latest package information
+	einfo "Syncing Portage for latest GCC availability..."
+	try emerge --sync
+	
+	# Emerge the new compiler
+	einfo "Installing latest GCC version (this may take a while)..."
+	if try emerge -v1 sys-devel/gcc; then
+		einfo "✅ GCC upgrade completed successfully"
+		
+		# Rebuild libtool after major GCC upgrade
+		einfo "Rebuilding libtool for new GCC compatibility..."
+		try emerge -v1 sys-devel/libtool
+		
+		# Find and select the latest GCC version
+		local latest_gcc
+		latest_gcc=$(gcc-config -l | grep -o '[0-9]*' | sort -nr | head -n1)
+		if [[ -n "$latest_gcc" ]]; then
+			einfo "Switching to GCC version $latest_gcc"
+			if try gcc-config "$latest_gcc"; then
+				# Source profile to update environment
+				source /etc/profile
+				einfo "✅ Successfully switched to GCC version $latest_gcc"
+				
+				# Verify the new GCC version
+				local new_gcc_version
+				new_gcc_version=$(gcc --version | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+				local new_gcc_major
+				new_gcc_major=$(echo "$new_gcc_version" | cut -d. -f1)
+				
+				einfo "Current GCC version: $new_gcc_version"
+				
+				if [[ "$new_gcc_major" -ge "$min_gcc_major" ]]; then
+					einfo "✅ GCC upgrade successful - now compatible with $package_name"
+					return 0
+				else
+					ewarn "⚠️  GCC upgrade completed but version $new_gcc_version still not compatible with $package_name"
+					return 1
+				fi
+			else
+				ewarn "⚠️  Failed to switch to new GCC version"
+				return 1
+			fi
+		else
+			ewarn "⚠️  Could not determine latest GCC version to select"
+			return 1
+		fi
+	else
+		ewarn "⚠️  GCC upgrade failed. $package_name installation may fail due to compiler incompatibility."
+		ewarn "You may need to manually upgrade GCC: emerge -v1 sys-devel/gcc"
+		return 1
 	fi
 }
