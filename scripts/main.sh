@@ -627,6 +627,12 @@ function main_install() {
 
 	einfo "Starting Gentoo installation following Handbook sequence"
 	
+	# Set up cleanup trap if enabled
+	if [[ "${CLEANUP_ON_INTERRUPT:-false}" == "true" ]]; then
+		trap 'cleanup_on_exit' INT TERM
+		einfo "Cleanup on interrupt enabled - will cleanup environment on Ctrl+C"
+	fi
+	
 	# Step 1: Prepare installation environment (network already configured)
 	einfo "Step 1: Preparing installation environment"
 	prepare_installation_environment
@@ -644,6 +650,12 @@ function main_install() {
 	einfo "Step 4: Chrooting into new system"
 	[[ $IS_EFI == "true" ]] && mount_efivars
 	gentoo_chroot "$ROOT_MOUNTPOINT" "$GENTOO_INSTALL_REPO_BIND/install" __install_gentoo_in_chroot
+	
+	# Automatic cleanup if enabled
+	if [[ "${ENABLE_AUTO_CLEANUP:-false}" == "true" ]]; then
+		einfo "Auto cleanup enabled - cleaning up environment"
+		unmount_and_clean_all
+	fi
 }
 
 function main_install_gentoo_in_chroot() {
@@ -1621,6 +1633,105 @@ function verify_network_configuration() {
 			ewarn "No network service enabled - user must configure networking manually"
 		fi
 	fi
+}
+
+# Cleanup and environment reset functions
+function unmount_and_clean_all() {
+	einfo "Starting cleanup process to reset the environment..."
+	
+	# 1. Unmount all filesystems recursively
+	einfo "Unmounting all chroot-related filesystems..."
+	if mountpoint -q -- "${ROOT_MOUNTPOINT:-/mnt/gentoo}"; then
+		# Use the existing gentoo_umount function which does a recursive unmount
+		if command -v gentoo_umount >/dev/null 2>&1; then
+			gentoo_umount
+			einfo "Successfully unmounted '${ROOT_MOUNTPOINT:-/mnt/gentoo}'."
+		else
+			# Fallback: manual unmount with recursive and lazy options
+			einfo "gentoo_umount not available, using manual unmount"
+			try umount -R -l "${ROOT_MOUNTPOINT:-/mnt/gentoo}"
+			einfo "Successfully unmounted '${ROOT_MOUNTPOINT:-/mnt/gentoo}'."
+		fi
+	else
+		einfo "'${ROOT_MOUNTPOINT:-/mnt/gentoo}' is not currently mounted. Skipping."
+	fi
+	
+	# 2. Close any open LUKS containers created by the script
+	einfo "Checking for and closing LUKS containers..."
+	# Detect active LUKS devices dynamically
+	local luks_devices=()
+	if command -v cryptsetup >/dev/null 2>&1; then
+		luks_devices=($(ls /dev/mapper/ 2>/dev/null | grep -v '^control$' || true))
+	fi
+	
+	# Also check for common LUKS device names used by the installer
+	local common_luks_devices=("root" "luks_root_0" "luks_root_1" "luks_swap" "luks_efi")
+	
+	for device in "${luks_devices[@]}" "${common_luks_devices[@]}"; do
+		if [[ -e "/dev/mapper/${device}" ]]; then
+			einfo "Closing LUKS device: /dev/mapper/${device}"
+			try cryptsetup close "${device}"
+		fi
+	done
+	
+	# 3. Stop any RAID arrays created by the script
+	einfo "Checking for and stopping RAID arrays..."
+	# Detect active RAID devices dynamically
+	local raid_devices=()
+	if command -v mdadm >/dev/null 2>&1; then
+		raid_devices=($(ls /dev/md/ 2>/dev/null || true))
+	fi
+	
+	# Also check for common RAID device names used by the installer
+	local common_raid_devices=("/dev/md/root" "/dev/md/swap" "/dev/md/efi" "/dev/md/bios")
+	
+	for device in "${raid_devices[@]}" "${common_raid_devices[@]}"; do
+		if [[ -e "${device}" ]]; then
+			einfo "Stopping RAID array: ${device}"
+			try mdadm --stop "${device}"
+		fi
+	done
+	
+	# 4. Deactivate all swap partitions as a safety measure
+	einfo "Deactivating all swap devices..."
+	try swapoff -a
+	
+	# 5. Remove the temporary installation directory
+	local tmp_dir="${TMP_DIR:-/tmp/gentoo-install}"
+	einfo "Removing temporary directory: $tmp_dir"
+	if [[ -d "$tmp_dir" ]]; then
+		rm -rf "$tmp_dir"
+		einfo "Temporary directory removed."
+	else
+		einfo "Temporary directory not found. Skipping."
+	fi
+	
+	# 6. Additional cleanup: remove any loop devices that might have been created
+	einfo "Checking for and removing loop devices..."
+	if command -v losetup >/dev/null 2>&1; then
+		local loop_devices=($(losetup -l 2>/dev/null | awk 'NR>1 {print $1}' | sed 's/://' || true))
+		for device in "${loop_devices[@]}"; do
+			if [[ -n "$device" ]]; then
+				einfo "Removing loop device: $device"
+				try losetup -d "$device"
+			fi
+		done
+	fi
+	
+	einfo "✅ Cleanup complete. You can now start a new installation process without rebooting."
+	einfo "Note: If you encounter any issues, a system reboot may still be necessary."
+}
+
+function cleanup_on_exit() {
+	einfo "🔄 Interrupt detected - performing automatic cleanup..."
+	einfo "This may take a moment to safely unmount filesystems and close devices..."
+	
+	# Call the main cleanup function
+	unmount_and_clean_all
+	
+	einfo "✅ Automatic cleanup completed due to interrupt"
+	einfo "You can now start a new installation process without rebooting"
+	exit 1
 }
 
 # Legacy functions for backward compatibility

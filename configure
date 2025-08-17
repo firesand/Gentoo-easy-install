@@ -548,6 +548,10 @@ function load_default_config() {
 	OVERLAY_URLS=()
 	OVERLAY_NAMES=()
 
+	# Cleanup Configuration
+	ENABLE_AUTO_CLEANUP=false  # Automatically cleanup on script exit
+	CLEANUP_ON_INTERRUPT=true  # Cleanup when interrupted (Ctrl+C)
+	
 	# All settings are unsaved.
 	UNSAVED_CHANGES=true
 }
@@ -1025,6 +1029,9 @@ MENU_ITEMS=(
 	"PACKAGE_USE_RULES"
 	"PACKAGE_KEYWORDS"
 	"OVERLAY_MANAGER"
+	"--------"
+	"ENABLE_AUTO_CLEANUP"
+	"CLEANUP_ON_INTERRUPT"
 	"--------"
 	"ADDITIONAL_PACKAGES"
 )
@@ -1984,6 +1991,24 @@ function OVERLAY_MANAGER_menu()  {
 	overlay_manager
 }
 
+function ENABLE_AUTO_CLEANUP_tag()   { echo "Auto cleanup on exit"; }
+function ENABLE_AUTO_CLEANUP_label() { on_off_label "$ENABLE_AUTO_CLEANUP"; }
+function ENABLE_AUTO_CLEANUP_show()  { return 0; }
+function ENABLE_AUTO_CLEANUP_help()  { echo "Automatically cleanup the environment when the installer exits normally. This ensures a clean state for future installations."; }
+function ENABLE_AUTO_CLEANUP_menu()  {
+	on_off_toggle ENABLE_AUTO_CLEANUP
+	UNSAVED_CHANGES=true
+}
+
+function CLEANUP_ON_INTERRUPT_tag()   { echo "Cleanup on interrupt"; }
+function CLEANUP_ON_INTERRUPT_label() { on_off_label "$CLEANUP_ON_INTERRUPT"; }
+function CLEANUP_ON_INTERRUPT_show()  { return 0; }
+function CLEANUP_ON_INTERRUPT_help()  { echo "Automatically cleanup the environment when the installer is interrupted (Ctrl+C). This prevents leaving mounted filesystems and active devices."; }
+function CLEANUP_ON_INTERRUPT_menu()  {
+	on_off_toggle CLEANUP_ON_INTERRUPT
+	UNSAVED_CHANGES=true
+}
+
 # Package USE rules manager
 function package_use_rules_manager() {
 	dialog \
@@ -2234,6 +2259,10 @@ PACKAGE_USE_RULES=(${PACKAGE_USE_RULES[@]@Q})
 PACKAGE_KEYWORDS=(${PACKAGE_KEYWORDS[@]@Q})
 OVERLAY_URLS=(${OVERLAY_URLS[@]@Q})
 OVERLAY_NAMES=(${OVERLAY_NAMES[@]@Q})
+
+# Cleanup Configuration
+ENABLE_AUTO_CLEANUP=${ENABLE_AUTO_CLEANUP@Q}
+CLEANUP_ON_INTERRUPT=${CLEANUP_ON_INTERRUPT@Q}
 
 
 ################################################
